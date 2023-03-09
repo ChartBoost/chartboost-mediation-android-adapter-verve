@@ -15,7 +15,6 @@ import com.chartboost.heliumsdk.domain.*
 import com.chartboost.heliumsdk.utils.PartnerLogController
 import com.chartboost.heliumsdk.utils.PartnerLogController.PartnerAdapterEvents.*
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import net.pubnative.lite.sdk.HyBid
 import net.pubnative.lite.sdk.interstitial.HyBidInterstitialAd
@@ -317,29 +316,7 @@ class VerveAdapter : PartnerAdapter {
             val hyBidInterstitialAd = HyBidInterstitialAd(
                 context,
                 request.partnerPlacement,
-                object : HyBidInterstitialAd.Listener {
-                    override fun onInterstitialLoaded() {
-                        onLoadSuccess()
-                    }
-
-                    override fun onInterstitialLoadFailed(error: Throwable?) {
-                        error?.let {
-                            onLoadFailure(it)
-                        }
-                    }
-
-                    override fun onInterstitialImpression() {
-                        onShowSuccess()
-                    }
-
-                    override fun onInterstitialDismissed() {
-                        onDismiss()
-                    }
-
-                    override fun onInterstitialClick() {
-                        onClick()
-                    }
-                }
+                createHyBidInterstitialAdListener()
             )
 
             val partnerAd = PartnerAd(
@@ -382,6 +359,70 @@ class VerveAdapter : PartnerAdapter {
     }
 
     /**
+     * Construct a HyBidInterstitial ad listener.
+     * @return a [HyBidInterstitialAd.Listener].
+     */
+    private fun createHyBidInterstitialAdListener(): HyBidInterstitialAd.Listener {
+        return object : HyBidInterstitialAd.Listener {
+            override fun onInterstitialLoaded() {
+                onLoadSuccess()
+            }
+
+            override fun onInterstitialLoadFailed(error: Throwable?) {
+                error?.let {
+                    onLoadFailure(it)
+                }
+            }
+
+            override fun onInterstitialImpression() {
+                onShowSuccess()
+            }
+
+            override fun onInterstitialDismissed() {
+                onDismiss()
+            }
+
+            override fun onInterstitialClick() {
+                onClick()
+            }
+        }
+    }
+
+    /**
+     * Construct a HyBidRewardedAdListener ad listener.
+     * @return a [HyBidRewardedAd.Listener].
+     */
+    private fun createHyBidRewardedAdListener(): HyBidRewardedAd.Listener {
+        return object : HyBidRewardedAd.Listener {
+            override fun onRewardedLoaded() {
+                onLoadSuccess()
+            }
+
+            override fun onRewardedLoadFailed(error: Throwable?) {
+                error?.let {
+                    onLoadFailure(it)
+                }
+            }
+
+            override fun onRewardedOpened() {
+                onShowSuccess()
+            }
+
+            override fun onRewardedClosed() {
+                onDismiss()
+            }
+
+            override fun onRewardedClick() {
+                onClick()
+            }
+
+            override fun onReward() {
+                onAdReward()
+            }
+        }
+    }
+
+    /**
      * Attempt to load a Verve rewarded ad.
      *
      * @param context The current [Context].
@@ -399,33 +440,7 @@ class VerveAdapter : PartnerAdapter {
             val hyBidRewardedAd = HyBidRewardedAd(
                 context,
                 request.partnerPlacement,
-                object : HyBidRewardedAd.Listener {
-                    override fun onRewardedLoaded() {
-                        onLoadSuccess()
-                    }
-
-                    override fun onRewardedLoadFailed(error: Throwable?) {
-                        error?.let {
-                            onLoadFailure(it)
-                        }
-                    }
-
-                    override fun onRewardedOpened() {
-                        onShowSuccess()
-                    }
-
-                    override fun onRewardedClosed() {
-                        onDismiss()
-                    }
-
-                    override fun onRewardedClick() {
-                        onClick()
-                    }
-
-                    override fun onReward() {
-                        onAdReward()
-                    }
-                }
+                createHyBidRewardedAdListener()
             )
 
             val partnerAd = PartnerAd(
@@ -545,21 +560,18 @@ class VerveAdapter : PartnerAdapter {
                     PartnerLogController.log(INVALIDATE_SUCCEEDED)
                     Result.success(partnerAd)
                 }
-
                 is HyBidInterstitialAd -> {
                     it.destroy()
 
                     PartnerLogController.log(INVALIDATE_SUCCEEDED)
                     Result.success(partnerAd)
                 }
-
                 is HyBidRewardedAd -> {
                     it.destroy()
 
                     PartnerLogController.log(INVALIDATE_SUCCEEDED)
                     Result.success(partnerAd)
                 }
-
                 else -> {
                     PartnerLogController.log(
                         INVALIDATE_FAILED,
