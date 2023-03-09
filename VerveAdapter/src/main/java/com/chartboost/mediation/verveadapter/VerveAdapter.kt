@@ -15,13 +15,14 @@ import com.chartboost.heliumsdk.domain.*
 import com.chartboost.heliumsdk.utils.PartnerLogController
 import com.chartboost.heliumsdk.utils.PartnerLogController.PartnerAdapterEvents.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import net.pubnative.lite.sdk.HyBid
 import net.pubnative.lite.sdk.interstitial.HyBidInterstitialAd
 import net.pubnative.lite.sdk.models.AdSize
 import net.pubnative.lite.sdk.rewarded.HyBidRewardedAd
+import net.pubnative.lite.sdk.utils.Logger
 import net.pubnative.lite.sdk.views.HyBidAdView
-import net.pubnative.lite.sdk.views.HyBidBannerAdView
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -32,7 +33,7 @@ class VerveAdapter : PartnerAdapter {
 
     companion object {
         /**
-         *
+         * Test mode option that can be set to enabled to test HyBid SDK integrations.
          */
         var testMode = HyBid.isTestMode()
             set(value) {
@@ -45,7 +46,17 @@ class VerveAdapter : PartnerAdapter {
             }
 
         /**
-         * Key for parsing the Pangle SDK application ID.
+         * Log level option that can be set to alter the output verbosity of the HyBid SDK.
+         */
+        var logLevel = Logger.Level.none
+            set(value) {
+                field = value
+                HyBid.setLogLevel(value)
+                PartnerLogController.log(CUSTOM, "HyBid log level set to $value.")
+            }
+
+        /**
+         * Key for parsing the HyBid SDK app token.
          */
         private const val APP_TOKEN_KEY = "app_token"
     }
@@ -137,15 +148,18 @@ class VerveAdapter : PartnerAdapter {
 
         return suspendCoroutine { continuation ->
             Json.decodeFromJsonElement<String>(
-                partnerConfiguration.credentials.getValue(APP_TOKEN_KEY)
+                (partnerConfiguration.credentials as JsonObject).getValue(APP_TOKEN_KEY)
             )
                 .trim()
                 .takeIf { it.isNotEmpty() }?.let { app_token ->
                     (context.applicationContext as Application).let { application ->
-                        testMode = true
                         HyBid.initialize(app_token, application) { success ->
                             when (success) {
                                 true -> {
+                                    // TODO: Remove after testing E2E.
+                                    logLevel = Logger.Level.verbose
+                                    testMode = true
+
                                     continuation.resume(
                                         Result.success(
                                             PartnerLogController.log(SETUP_SUCCEEDED)
@@ -192,7 +206,6 @@ class VerveAdapter : PartnerAdapter {
     ): Map<String, String> {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
         PartnerLogController.log(BIDDER_INFO_FETCH_SUCCEEDED)
-        // TODO: HyBid.getAppToken() may be the bidder info.
         return emptyMap()
     }
 
@@ -234,7 +247,7 @@ class VerveAdapter : PartnerAdapter {
         listener: PartnerAdListener
     ): Result<PartnerAd> {
         return suspendCoroutine { continuation ->
-            val hyBidAdView = HyBidBannerAdView(context)
+            val hyBidAdView = HyBidAdView(context)
             val partnerAd = PartnerAd(
                 ad = hyBidAdView,
                 details = emptyMap(),
@@ -605,7 +618,28 @@ class VerveAdapter : PartnerAdapter {
                 else -> GDPR_UNKNOWN
             }
         )
-        // TODO: Not yet implemented
+
+        PartnerLogController.log(
+            when (gdprConsentStatus) {
+                GdprConsentStatus.GDPR_CONSENT_UNKNOWN -> GDPR_CONSENT_UNKNOWN
+                GdprConsentStatus.GDPR_CONSENT_GRANTED -> GDPR_CONSENT_GRANTED
+                GdprConsentStatus.GDPR_CONSENT_DENIED -> GDPR_CONSENT_DENIED
+            }
+        )
+
+        if (HyBid.isInitialized() && applies == HyBid.getUserDataManager().gdprApplies()) {
+            when (gdprConsentStatus) {
+                GdprConsentStatus.GDPR_CONSENT_GRANTED -> HyBid.getUserDataManager().grantConsent()
+                GdprConsentStatus.GDPR_CONSENT_DENIED -> HyBid.getUserDataManager().denyConsent()
+                GdprConsentStatus.GDPR_CONSENT_UNKNOWN -> {
+                    // We don't know the consent, let's have HyBid ask and show their consent screen.
+                    if (HyBid.getUserDataManager().shouldAskConsent()) {
+                        val intent = HyBid.getUserDataManager().getConsentScreenIntent(context)
+                        context.startActivity(intent)
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -620,7 +654,11 @@ class VerveAdapter : PartnerAdapter {
         hasGrantedCcpaConsent: Boolean,
         privacyString: String
     ) {
-        // TODO: Not yet implemented
+        PartnerLogController.log(
+            if (hasGrantedCcpaConsent) CCPA_CONSENT_GRANTED
+            else CCPA_CONSENT_DENIED
+        )
+        if (HyBid.isInitialized()) HyBid.getUserDataManager().iabusPrivacyString = privacyString
     }
 
     /**
@@ -634,6 +672,6 @@ class VerveAdapter : PartnerAdapter {
             if (isSubjectToCoppa) COPPA_SUBJECT
             else COPPA_NOT_SUBJECT
         )
-        HyBid.setCoppaEnabled(isSubjectToCoppa)
+        if (HyBid.isInitialized()) HyBid.setCoppaEnabled(isSubjectToCoppa)
     }
 }
