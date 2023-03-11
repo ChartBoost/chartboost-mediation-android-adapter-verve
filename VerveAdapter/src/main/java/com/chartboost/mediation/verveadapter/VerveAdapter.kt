@@ -14,6 +14,7 @@ import android.view.View
 import com.chartboost.heliumsdk.domain.*
 import com.chartboost.heliumsdk.utils.PartnerLogController
 import com.chartboost.heliumsdk.utils.PartnerLogController.PartnerAdapterEvents.*
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -69,7 +70,7 @@ class VerveAdapter : PartnerAdapter {
     /**
      * Lambda to be called for a failed Verve ad load.
      */
-    private var onLoadFailure: (error: Throwable) -> Unit = { _: Throwable -> }
+    private var onLoadFailure: (error: Throwable?) -> Unit = { _: Throwable? -> }
 
     /**
      * Lambda to be called for a successful Verve ad click.
@@ -97,9 +98,9 @@ class VerveAdapter : PartnerAdapter {
     private var onPartnerImpression: () -> Unit = {}
 
     /**
-     * Lambda to be called for a successful Verve ad impression.
+     * Lambda to be called for a successful Verve ad reward.
      */
-    private var onAdReward: () -> Unit = {}
+    private var onAdRewarded: () -> Unit = {}
 
     /**
      * Get the HyBid SDK version.
@@ -151,9 +152,9 @@ class VerveAdapter : PartnerAdapter {
                 (partnerConfiguration.credentials as JsonObject).getValue(APP_TOKEN_KEY)
             )
                 .trim()
-                .takeIf { it.isNotEmpty() }?.let { app_token ->
+                .takeIf { it.isNotEmpty() }?.let { appToken ->
                     (context.applicationContext as Application).let { application ->
-                        HyBid.initialize(app_token, application) { success ->
+                        HyBid.initialize(appToken, application) { success ->
                             when (success) {
                                 true -> {
                                     // TODO: Remove after testing E2E.
@@ -233,274 +234,6 @@ class VerveAdapter : PartnerAdapter {
     }
 
     /**
-     * Attempt to load a Verve banner ad.
-     *
-     * @param context The current [Context].
-     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
-     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
-     *
-     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
-     */
-    private suspend fun loadBannerAd(
-        context: Context,
-        request: PartnerAdLoadRequest,
-        listener: PartnerAdListener
-    ): Result<PartnerAd> {
-        return suspendCoroutine { continuation ->
-            val hyBidAdView = HyBidAdView(context)
-            val partnerAd = PartnerAd(
-                ad = hyBidAdView,
-                details = emptyMap(),
-                request = request
-            )
-            hyBidAdView.setAdSize(getHyBidAdSize(request.size))
-            hyBidAdView.load(
-                request.partnerPlacement,
-                object : HyBidAdView.Listener {
-                    override fun onAdLoaded() {
-                        PartnerLogController.log(LOAD_SUCCEEDED)
-                        continuation.resume(
-                            Result.success(partnerAd)
-                        )
-                    }
-
-                    override fun onAdLoadFailed(error: Throwable?) {
-                        error?.let {
-                            it.message?.let { message ->
-                                PartnerLogController.log(LOAD_FAILED, message)
-                            }
-                            continuation.resume(
-                                Result.failure(
-                                    ChartboostMediationAdException(
-                                        ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION
-                                    )
-                                )
-                            )
-                        }
-                    }
-
-                    override fun onAdImpression() {
-                        PartnerLogController.log(DID_TRACK_IMPRESSION)
-                        listener.onPartnerAdImpression(partnerAd)
-                    }
-
-                    override fun onAdClick() {
-                        PartnerLogController.log(DID_CLICK)
-                        listener.onPartnerAdClicked(partnerAd)
-                    }
-                }
-            )
-        }
-    }
-
-    /**
-     * Find the most appropriate HyBid ad size for the given screen area based on height.
-     *
-     * @param size The [Size] to parse for conversion.
-     *
-     * @return The HyBid ad size that best matches the given [Size].
-     */
-    private fun getHyBidAdSize(size: Size?): AdSize {
-        return size?.height?.let {
-            when {
-                it in 50 until 90 -> AdSize.SIZE_320x50
-                it in 90 until 250 -> AdSize.SIZE_728x90
-                it >= 250 -> AdSize.SIZE_300x250
-                else -> AdSize.SIZE_320x50
-            }
-        } ?: AdSize.SIZE_320x50
-    }
-
-    /**
-     * Attempt to load a Verve interstitial ad.
-     *
-     * @param context The current [Context].
-     * @param request An [PartnerAdLoadRequest] instance containing data to load the ad with.
-     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
-     *
-     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
-     */
-    private suspend fun loadInterstitialAd(
-        context: Context,
-        request: PartnerAdLoadRequest,
-        listener: PartnerAdListener
-    ): Result<PartnerAd> {
-        return suspendCoroutine { continuation ->
-            val hyBidInterstitialAd = HyBidInterstitialAd(
-                context,
-                request.partnerPlacement,
-                createHyBidInterstitialAdListener()
-            )
-
-            val partnerAd = PartnerAd(
-                ad = hyBidInterstitialAd,
-                details = emptyMap(),
-                request = request
-            )
-
-            onLoadSuccess = {
-                PartnerLogController.log(LOAD_SUCCEEDED)
-                continuation.resume(Result.success(partnerAd))
-            }
-
-            onLoadFailure = {
-                it.message?.let { message ->
-                    PartnerLogController.log(LOAD_FAILED, message)
-                }
-                continuation.resume(
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
-                )
-            }
-
-            onDismiss = {
-                PartnerLogController.log(DID_DISMISS)
-                listener.onPartnerAdDismissed(partnerAd, null)
-            }
-
-            onClick = {
-                PartnerLogController.log(DID_CLICK)
-                listener.onPartnerAdClicked(partnerAd)
-            }
-
-            onPartnerImpression = {
-                PartnerLogController.log(DID_TRACK_IMPRESSION)
-                listener.onPartnerAdImpression(partnerAd)
-            }
-
-            hyBidInterstitialAd.load()
-        }
-    }
-
-    /**
-     * Construct a HyBidInterstitial ad listener.
-     * @return a [HyBidInterstitialAd.Listener].
-     */
-    private fun createHyBidInterstitialAdListener(): HyBidInterstitialAd.Listener {
-        return object : HyBidInterstitialAd.Listener {
-            override fun onInterstitialLoaded() {
-                onLoadSuccess()
-            }
-
-            override fun onInterstitialLoadFailed(error: Throwable?) {
-                error?.let {
-                    onLoadFailure(it)
-                }
-            }
-
-            override fun onInterstitialImpression() {
-                onShowSuccess()
-            }
-
-            override fun onInterstitialDismissed() {
-                onDismiss()
-            }
-
-            override fun onInterstitialClick() {
-                onClick()
-            }
-        }
-    }
-
-    /**
-     * Construct a HyBidRewardedAdListener ad listener.
-     * @return a [HyBidRewardedAd.Listener].
-     */
-    private fun createHyBidRewardedAdListener(): HyBidRewardedAd.Listener {
-        return object : HyBidRewardedAd.Listener {
-            override fun onRewardedLoaded() {
-                onLoadSuccess()
-            }
-
-            override fun onRewardedLoadFailed(error: Throwable?) {
-                error?.let {
-                    onLoadFailure(it)
-                }
-            }
-
-            override fun onRewardedOpened() {
-                onShowSuccess()
-            }
-
-            override fun onRewardedClosed() {
-                onDismiss()
-            }
-
-            override fun onRewardedClick() {
-                onClick()
-            }
-
-            override fun onReward() {
-                onAdReward()
-            }
-        }
-    }
-
-    /**
-     * Attempt to load a Verve rewarded ad.
-     *
-     * @param context The current [Context].
-     * @param request The [PartnerAdLoadRequest] containing relevant data for the current ad load call.
-     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
-     *
-     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
-     */
-    private suspend fun loadRewardedAd(
-        context: Context,
-        request: PartnerAdLoadRequest,
-        listener: PartnerAdListener
-    ): Result<PartnerAd> {
-        return suspendCoroutine { continuation ->
-            val hyBidRewardedAd = HyBidRewardedAd(
-                context,
-                request.partnerPlacement,
-                createHyBidRewardedAdListener()
-            )
-
-            val partnerAd = PartnerAd(
-                ad = hyBidRewardedAd,
-                details = emptyMap(),
-                request = request
-            )
-
-            onLoadSuccess = {
-                PartnerLogController.log(LOAD_SUCCEEDED)
-                continuation.resume(Result.success(partnerAd))
-            }
-
-            onLoadFailure = {
-                it.message?.let { message ->
-                    PartnerLogController.log(LOAD_FAILED, message)
-                }
-                continuation.resume(
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
-                )
-            }
-
-            onDismiss = {
-                PartnerLogController.log(DID_DISMISS)
-                listener.onPartnerAdDismissed(partnerAd, null)
-            }
-
-            onClick = {
-                PartnerLogController.log(DID_CLICK)
-                listener.onPartnerAdClicked(partnerAd)
-            }
-
-            onPartnerImpression = {
-                PartnerLogController.log(DID_TRACK_IMPRESSION)
-                listener.onPartnerAdImpression(partnerAd)
-            }
-
-            onAdReward = {
-                PartnerLogController.log(DID_REWARD)
-                listener.onPartnerAdRewarded(partnerAd)
-            }
-
-            hyBidRewardedAd.load()
-        }
-    }
-
-    /**
      * Attempt to show the currently loaded Verve ad.
      *
      * @param context The current [Context]
@@ -512,7 +245,7 @@ class VerveAdapter : PartnerAdapter {
         PartnerLogController.log(SHOW_STARTED)
 
         return partnerAd.ad?.let { ad ->
-            return suspendCoroutine { continuation ->
+            return suspendCancellableCoroutine { continuation ->
                 when (ad) {
                     is HyBidInterstitialAd -> if (ad.isReady) ad.show()
                     is HyBidRewardedAd -> if (ad.isReady) ad.show()
@@ -554,49 +287,6 @@ class VerveAdapter : PartnerAdapter {
     override suspend fun invalidate(partnerAd: PartnerAd): Result<PartnerAd> {
         PartnerLogController.log(INVALIDATE_STARTED)
         return destroyAd(partnerAd)
-    }
-
-    /**
-     * Attempt to destroy the Verve ad.
-     *
-     * @param partnerAd The [PartnerAd] instance containing the ad to be destroyed.
-     *
-     * @return Result.success(PartnerAd) if the ad was successfully destroyed, Result.failure(Exception) otherwise.
-     */
-    private fun destroyAd(partnerAd: PartnerAd): Result<PartnerAd> {
-        return partnerAd.ad?.let {
-            when (it) {
-                is HyBidAdView -> {
-                    it.visibility = View.GONE
-                    it.destroy()
-
-                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
-                    Result.success(partnerAd)
-                }
-                is HyBidInterstitialAd -> {
-                    it.destroy()
-
-                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
-                    Result.success(partnerAd)
-                }
-                is HyBidRewardedAd -> {
-                    it.destroy()
-
-                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
-                    Result.success(partnerAd)
-                }
-                else -> {
-                    PartnerLogController.log(
-                        INVALIDATE_FAILED,
-                        "Ad is not a HyBidInterstitialAd, HyBidRewardedAd, or HyBidAdView."
-                    )
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_WRONG_RESOURCE_TYPE))
-                }
-            }
-        } ?: run {
-            PartnerLogController.log(INVALIDATE_FAILED, "Ad is null.")
-            Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
-        }
     }
 
     /**
@@ -673,5 +363,306 @@ class VerveAdapter : PartnerAdapter {
             else COPPA_NOT_SUBJECT
         )
         if (HyBid.isInitialized()) HyBid.setCoppaEnabled(isSubjectToCoppa)
+    }
+
+    /**
+     * Attempt to load a Verve banner ad.
+     *
+     * @param context The current [Context].
+     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
+     *
+     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
+     */
+    private suspend fun loadBannerAd(
+        context: Context,
+        request: PartnerAdLoadRequest,
+        listener: PartnerAdListener
+    ): Result<PartnerAd> {
+        return suspendCoroutine { continuation ->
+            val hyBidAdView = HyBidAdView(context)
+            val partnerAd = PartnerAd(
+                ad = hyBidAdView,
+                details = emptyMap(),
+                request = request
+            )
+            hyBidAdView.setAdSize(getHyBidAdSize(request.size))
+            hyBidAdView.load(
+                request.partnerPlacement,
+                object : HyBidAdView.Listener {
+                    override fun onAdLoaded() {
+                        PartnerLogController.log(LOAD_SUCCEEDED)
+                        continuation.resume(
+                            Result.success(partnerAd)
+                        )
+                    }
+
+                    override fun onAdLoadFailed(error: Throwable?) {
+                        error?.let {
+                            it.message?.let { message ->
+                                PartnerLogController.log(LOAD_FAILED, message)
+                            }
+                        }
+                        continuation.resume(
+                            Result.failure(
+                                ChartboostMediationAdException(
+                                    ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION
+                                )
+                            )
+                        )
+                    }
+
+                    override fun onAdImpression() {
+                        PartnerLogController.log(DID_TRACK_IMPRESSION)
+                        listener.onPartnerAdImpression(partnerAd)
+                    }
+
+                    override fun onAdClick() {
+                        PartnerLogController.log(DID_CLICK)
+                        listener.onPartnerAdClicked(partnerAd)
+                    }
+                }
+            )
+        }
+    }
+
+    /**
+     * Find the most appropriate HyBid ad size for the given screen area based on height.
+     *
+     * @param size The [Size] to parse for conversion.
+     *
+     * @return The HyBid ad size that best matches the given [Size].
+     */
+    private fun getHyBidAdSize(size: Size?): AdSize {
+        return size?.height?.let {
+            when {
+                it in 50 until 90 -> AdSize.SIZE_320x50
+                it in 90 until 250 -> AdSize.SIZE_728x90
+                it >= 250 -> AdSize.SIZE_300x250
+                else -> AdSize.SIZE_320x50
+            }
+        } ?: AdSize.SIZE_320x50
+    }
+
+    /**
+     * Attempt to load a Verve interstitial ad.
+     *
+     * @param context The current [Context].
+     * @param request An [PartnerAdLoadRequest] instance containing data to load the ad with.
+     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
+     *
+     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
+     */
+    private suspend fun loadInterstitialAd(
+        context: Context,
+        request: PartnerAdLoadRequest,
+        listener: PartnerAdListener
+    ): Result<PartnerAd> {
+        return suspendCoroutine { continuation ->
+            val hyBidInterstitialAd = HyBidInterstitialAd(
+                context,
+                request.partnerPlacement,
+                createHyBidInterstitialAdListener()
+            )
+
+            val partnerAd = PartnerAd(
+                ad = hyBidInterstitialAd,
+                details = emptyMap(),
+                request = request
+            )
+
+            onLoadSuccess = {
+                PartnerLogController.log(LOAD_SUCCEEDED)
+                continuation.resume(Result.success(partnerAd))
+            }
+
+            onLoadFailure = {
+                it?.message?.let { message ->
+                    PartnerLogController.log(LOAD_FAILED, message)
+                }
+                continuation.resume(
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
+                )
+            }
+
+            onDismiss = {
+                PartnerLogController.log(DID_DISMISS)
+                listener.onPartnerAdDismissed(partnerAd, null)
+            }
+
+            onClick = {
+                PartnerLogController.log(DID_CLICK)
+                listener.onPartnerAdClicked(partnerAd)
+            }
+
+            onPartnerImpression = {
+                PartnerLogController.log(DID_TRACK_IMPRESSION)
+                listener.onPartnerAdImpression(partnerAd)
+            }
+
+            hyBidInterstitialAd.load()
+        }
+    }
+
+    /**
+     * Construct a HyBidInterstitial ad listener.
+     * @return a [HyBidInterstitialAd.Listener].
+     */
+    private fun createHyBidInterstitialAdListener(): HyBidInterstitialAd.Listener {
+        return object : HyBidInterstitialAd.Listener {
+            override fun onInterstitialLoaded() {
+                onLoadSuccess()
+            }
+
+            override fun onInterstitialLoadFailed(error: Throwable?) {
+                error?.let {
+                    onLoadFailure(it)
+                }
+            }
+
+            override fun onInterstitialImpression() {
+                onShowSuccess()
+            }
+
+            override fun onInterstitialDismissed() {
+                onDismiss()
+            }
+
+            override fun onInterstitialClick() {
+                onClick()
+            }
+        }
+    }
+
+    /**
+     * Attempt to load a Verve rewarded ad.
+     *
+     * @param context The current [Context].
+     * @param request The [PartnerAdLoadRequest] containing relevant data for the current ad load call.
+     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
+     *
+     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
+     */
+    private suspend fun loadRewardedAd(
+        context: Context,
+        request: PartnerAdLoadRequest,
+        listener: PartnerAdListener
+    ): Result<PartnerAd> {
+        return suspendCoroutine { continuation ->
+            val hyBidRewardedAd = HyBidRewardedAd(
+                context,
+                request.partnerPlacement,
+                object : HyBidRewardedAd.Listener {
+                    override fun onRewardedLoaded() {
+                        onLoadSuccess()
+                    }
+
+                    override fun onRewardedLoadFailed(error: Throwable?) {
+                        onLoadFailure(error)
+                    }
+
+                    override fun onRewardedOpened() {
+                        onShowSuccess()
+                    }
+
+                    override fun onRewardedClosed() {
+                        onDismiss()
+                    }
+
+                    override fun onRewardedClick() {
+                        onClick()
+                    }
+
+                    override fun onReward() {
+                        onAdRewarded()
+                    }
+                }
+            )
+
+            val partnerAd = PartnerAd(
+                ad = hyBidRewardedAd,
+                details = emptyMap(),
+                request = request
+            )
+
+            onLoadSuccess = {
+                PartnerLogController.log(LOAD_SUCCEEDED)
+                continuation.resume(Result.success(partnerAd))
+            }
+
+            onLoadFailure = {
+                it?.message?.let { message ->
+                    PartnerLogController.log(LOAD_FAILED, message)
+                }
+                continuation.resume(
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
+                )
+            }
+
+            onDismiss = {
+                PartnerLogController.log(DID_DISMISS)
+                listener.onPartnerAdDismissed(partnerAd, null)
+            }
+
+            onClick = {
+                PartnerLogController.log(DID_CLICK)
+                listener.onPartnerAdClicked(partnerAd)
+            }
+
+            onPartnerImpression = {
+                PartnerLogController.log(DID_TRACK_IMPRESSION)
+                listener.onPartnerAdImpression(partnerAd)
+            }
+
+            onAdRewarded = {
+                PartnerLogController.log(DID_REWARD)
+                listener.onPartnerAdRewarded(partnerAd)
+            }
+
+            hyBidRewardedAd.load()
+        }
+    }
+
+    /**
+     * Attempt to destroy the Verve ad.
+     *
+     * @param partnerAd The [PartnerAd] instance containing the ad to be destroyed.
+     *
+     * @return Result.success(PartnerAd) if the ad was successfully destroyed, Result.failure(Exception) otherwise.
+     */
+    private fun destroyAd(partnerAd: PartnerAd): Result<PartnerAd> {
+        return partnerAd.ad?.let {
+            when (it) {
+                is HyBidAdView -> {
+                    it.visibility = View.GONE
+                    it.destroy()
+
+                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
+                    Result.success(partnerAd)
+                }
+                is HyBidInterstitialAd -> {
+                    it.destroy()
+
+                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
+                    Result.success(partnerAd)
+                }
+                is HyBidRewardedAd -> {
+                    it.destroy()
+
+                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
+                    Result.success(partnerAd)
+                }
+                else -> {
+                    PartnerLogController.log(
+                        INVALIDATE_FAILED,
+                        "Ad is not a HyBidInterstitialAd, HyBidRewardedAd, or HyBidAdView."
+                    )
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_WRONG_RESOURCE_TYPE))
+                }
+            }
+        } ?: run {
+            PartnerLogController.log(INVALIDATE_FAILED, "Ad is null.")
+            Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
+        }
     }
 }
