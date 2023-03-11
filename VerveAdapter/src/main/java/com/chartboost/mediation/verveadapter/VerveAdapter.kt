@@ -48,7 +48,7 @@ class VerveAdapter : PartnerAdapter {
         /**
          * Log level option that can be set to alter the output verbosity of the HyBid SDK.
          */
-        var logLevel = Logger.Level.none
+        var logLevel = Logger.Level.error
             set(value) {
                 field = value
                 HyBid.setLogLevel(value)
@@ -122,6 +122,8 @@ class VerveAdapter : PartnerAdapter {
         partnerConfiguration: PartnerConfiguration
     ): Result<Unit> {
         PartnerLogController.log(SETUP_STARTED)
+        hyBidInterstitialAdMap.clear()
+        hyBidRewardedAdMap.clear()
 
         return suspendCoroutine { continuation ->
             Json.decodeFromJsonElement<String>(
@@ -133,10 +135,6 @@ class VerveAdapter : PartnerAdapter {
                         HyBid.initialize(appToken, application) { success ->
                             when (success) {
                                 true -> {
-                                    // TODO: Remove after testing E2E.
-                                    logLevel = Logger.Level.verbose
-                                    testMode = true
-
                                     continuation.resume(
                                         Result.success(
                                             PartnerLogController.log(SETUP_SUCCEEDED)
@@ -183,6 +181,7 @@ class VerveAdapter : PartnerAdapter {
     ): Map<String, String> {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
         PartnerLogController.log(BIDDER_INFO_FETCH_SUCCEEDED)
+
         return emptyMap()
     }
 
@@ -355,9 +354,10 @@ class VerveAdapter : PartnerAdapter {
 
                     override fun onAdLoadFailed(error: Throwable?) {
                         error?.let {
-                            it.message?.let { message ->
-                                PartnerLogController.log(LOAD_FAILED, message)
-                            }
+                            PartnerLogController.log(LOAD_FAILED,
+                                "Message: ${it.message}\n Cause:${it.cause}")
+                        } ?: run {
+                            PartnerLogController.log(LOAD_FAILED, "Throwable error is null.")
                         }
                         continuation.resume(
                             Result.failure(
@@ -432,8 +432,11 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onInterstitialLoadFailed(error: Throwable?) {
-                        error?.message?.let { message ->
-                            PartnerLogController.log(LOAD_FAILED, message)
+                        error?.let {
+                            PartnerLogController.log(LOAD_FAILED,
+                                "Message: ${it.message}\n Cause:${it.cause}")
+                        } ?: run {
+                            PartnerLogController.log(LOAD_FAILED, "Throwable error is null.")
                         }
                         hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
                         continuation.resume(
@@ -483,7 +486,6 @@ class VerveAdapter : PartnerAdapter {
                 details = emptyMap(),
                 request = request
             )
-
             HyBidRewardedAd(
                 context,
                 request.partnerPlacement,
@@ -494,8 +496,11 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onRewardedLoadFailed(error: Throwable?) {
-                        error?.message?.let { message ->
-                            PartnerLogController.log(LOAD_FAILED, message)
+                        error?.let {
+                            PartnerLogController.log(LOAD_FAILED,
+                                "Message: ${it.message}\n Cause:${it.cause}")
+                        } ?: run {
+                            PartnerLogController.log(LOAD_FAILED, "Throwable error is null.")
                         }
                         hyBidRewardedAdMap.remove(partnerAd.request.identifier)
                         continuation.resume(
@@ -593,7 +598,7 @@ class VerveAdapter : PartnerAdapter {
     private fun destroyFullscreenAd(partnerAd: PartnerAd): Result<PartnerAd> {
         return when (partnerAd.request.format) {
             AdFormat.INTERSTITIAL -> {
-                hyBidInterstitialAdMap[partnerAd.request.identifier]?.let {
+                hyBidInterstitialAdMap.remove(partnerAd.request.identifier)?.let {
                     it.destroy()
                     PartnerLogController.log(INVALIDATE_SUCCEEDED)
                     Result.success(partnerAd)
@@ -603,7 +608,7 @@ class VerveAdapter : PartnerAdapter {
                 }
             }
             AdFormat.REWARDED -> {
-                hyBidRewardedAdMap[partnerAd.request.identifier]?.let {
+                hyBidRewardedAdMap.remove(partnerAd.request.identifier)?.let {
                     it.destroy()
                     PartnerLogController.log(INVALIDATE_SUCCEEDED)
                     Result.success(partnerAd)
@@ -637,7 +642,7 @@ class VerveAdapter : PartnerAdapter {
                 PartnerLogController.log(INVALIDATE_SUCCEEDED)
                 Result.success(partnerAd)
             } ?: run {
-                PartnerLogController.log(INVALIDATE_FAILED, "Ad is not an HyBidAdView.")
+                PartnerLogController.log(INVALIDATE_FAILED, "Ad is not a HyBidAdView.")
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_WRONG_RESOURCE_TYPE))
             }
         } ?: run {
