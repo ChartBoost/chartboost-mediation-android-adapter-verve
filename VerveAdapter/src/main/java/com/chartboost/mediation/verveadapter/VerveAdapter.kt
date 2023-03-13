@@ -48,7 +48,7 @@ class VerveAdapter : PartnerAdapter {
         /**
          * Log level option that can be set to alter the output verbosity of the HyBid SDK.
          */
-        var logLevel = Logger.Level.none
+        var logLevel = Logger.Level.info
             set(value) {
                 field = value
                 HyBid.setLogLevel(value)
