@@ -35,7 +35,7 @@ class VerveAdapter : PartnerAdapter {
         /**
          * Test mode option that can be set to enabled to test HyBid SDK integrations.
          */
-        var testMode = HyBid.isTestMode()
+        var testModeEnabled = HyBid.isTestMode()
             set(value) {
                 field = value
                 HyBid.setTestMode(value)
@@ -353,12 +353,14 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onAdLoadFailed(error: Throwable?) {
-                        error?.let {
-                            PartnerLogController.log(LOAD_FAILED,
-                                "Message: ${it.message}\n Cause:${it.cause}")
-                        } ?: run {
-                            PartnerLogController.log(LOAD_FAILED, "Throwable error is null.")
-                        }
+                        PartnerLogController.log(
+                            LOAD_FAILED,
+                            if (error != null) {
+                                "Message: ${error.message}\n Cause:${error.cause}"
+                            } else {
+                                "Throwable error is null."
+                            }
+                        )
                         continuation.resume(
                             Result.failure(
                                 ChartboostMediationAdException(
@@ -432,12 +434,14 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onInterstitialLoadFailed(error: Throwable?) {
-                        error?.let {
-                            PartnerLogController.log(LOAD_FAILED,
-                                "Message: ${it.message}\n Cause:${it.cause}")
-                        } ?: run {
-                            PartnerLogController.log(LOAD_FAILED, "Throwable error is null.")
-                        }
+                        PartnerLogController.log(
+                            LOAD_FAILED,
+                            if (error != null) {
+                                "Message: ${error.message}\n Cause:${error.cause}"
+                            } else {
+                                "Throwable error is null."
+                            }
+                        )
                         hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
                         continuation.resume(
                             Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
@@ -496,12 +500,14 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onRewardedLoadFailed(error: Throwable?) {
-                        error?.let {
-                            PartnerLogController.log(LOAD_FAILED,
-                                "Message: ${it.message}\n Cause:${it.cause}")
-                        } ?: run {
-                            PartnerLogController.log(LOAD_FAILED, "Throwable error is null.")
-                        }
+                        PartnerLogController.log(
+                            LOAD_FAILED,
+                            if (error != null) {
+                                "Message: ${error.message}\n Cause:${error.cause}"
+                            } else {
+                                "Throwable error is null."
+                            }
+                        )
                         hyBidRewardedAdMap.remove(partnerAd.request.identifier)
                         continuation.resume(
                             Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
@@ -574,7 +580,16 @@ class VerveAdapter : PartnerAdapter {
                         )
                     }
                 }
-                else -> {}
+                else -> {
+                    PartnerLogController.log(SHOW_FAILED, "Ad is not a fullscreen ad.")
+                    continuation.resume(
+                        Result.failure(
+                            ChartboostMediationAdException(
+                                ChartboostMediationError.CM_SHOW_FAILURE_UNSUPPORTED_AD_FORMAT
+                            )
+                        )
+                    )
+                }
             }
 
             onShowSuccess = {
