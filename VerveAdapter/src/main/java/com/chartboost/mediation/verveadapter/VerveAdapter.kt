@@ -554,7 +554,18 @@ class VerveAdapter : PartnerAdapter {
             when (partnerAd.request.format) {
                 AdFormat.INTERSTITIAL -> {
                     hyBidInterstitialAdMap[partnerAd.request.identifier]?.let {
-                        if (it.isReady) it.show()
+                        if (it.isReady) {
+                            it.show()
+                        } else {
+                            PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
+                            continuation.resume(
+                                Result.failure(
+                                    ChartboostMediationAdException(
+                                        ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY
+                                    )
+                                )
+                            )
+                        }
                     } ?: run {
                         PartnerLogController.log(SHOW_FAILED, "Ad is null.")
                         continuation.resume(
@@ -568,7 +579,18 @@ class VerveAdapter : PartnerAdapter {
                 }
                 AdFormat.REWARDED -> {
                     hyBidRewardedAdMap[partnerAd.request.identifier]?.let {
-                        if (it.isReady) it.show()
+                        if (it.isReady) {
+                            it.show()
+                        } else {
+                            PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
+                            continuation.resume(
+                                Result.failure(
+                                    ChartboostMediationAdException(
+                                        ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY
+                                    )
+                                )
+                            )
+                        }
                     } ?: run {
                         PartnerLogController.log(SHOW_FAILED, "Ad is null.")
                         continuation.resume(
