@@ -33,7 +33,7 @@ class VerveAdapter : PartnerAdapter {
 
     companion object {
         /**
-         * Test mode option that can be set to enabled to test HyBid SDK integrations.
+         * Test mode option that can be set to enabled to test Verve SDK integrations.
          */
         var testModeEnabled = HyBid.isTestMode()
             set(value) {
@@ -41,22 +41,22 @@ class VerveAdapter : PartnerAdapter {
                 HyBid.setTestMode(value)
                 PartnerLogController.log(
                     CUSTOM,
-                    "HyBid test mode is ${if (value) "enabled" else "disabled"}."
+                    "Verve SDK test mode is ${if (value) "enabled" else "disabled"}."
                 )
             }
 
         /**
-         * Log level option that can be set to alter the output verbosity of the HyBid SDK.
+         * Log level option that can be set to alter the output verbosity.
          */
         var logLevel = Logger.Level.info
             set(value) {
                 field = value
                 HyBid.setLogLevel(value)
-                PartnerLogController.log(CUSTOM, "HyBid log level set to $value.")
+                PartnerLogController.log(CUSTOM, "Verve SDK log level set to $value.")
             }
 
         /**
-         * Key for parsing the HyBid SDK app token.
+         * Key for parsing the Verve SDK app token.
          */
         private const val APP_TOKEN_KEY = "app_token"
     }
@@ -79,7 +79,7 @@ class VerveAdapter : PartnerAdapter {
     private var onShowSuccess: () -> Unit = {}
 
     /**
-     * Get the HyBid SDK version.
+     * Get the Verve SDK version.
      */
     override val partnerSdkVersion: String
         get() = HyBid.getHyBidVersion()
@@ -112,10 +112,12 @@ class VerveAdapter : PartnerAdapter {
         get() = "Verve"
 
     /**
-     * Initialize the HyBid SDK so that it is ready to request ads.
+     * Initialize the Verve SDK so that it is ready to request ads.
      *
      * @param context The current [Context].
-     * @param partnerConfiguration Configuration object containing relevant data to initialize Unity Ads.
+     * @param partnerConfiguration Configuration object containing relevant data to initialize Verve.
+     *
+     * @return Result.success(Unit) if Verve successfully initialized, Result.failure(Exception) otherwise.
      */
     override suspend fun setUp(
         context: Context,
@@ -245,7 +247,7 @@ class VerveAdapter : PartnerAdapter {
     }
 
     /**
-     * Notify the HyBid SDK of the GDPR applicability and consent status.
+     * Notify the Verve SDK of the GDPR applicability and consent status.
      *
      * @param context The current [Context].
      * @param applies True if GDPR applies, false otherwise.
@@ -277,7 +279,7 @@ class VerveAdapter : PartnerAdapter {
                 GdprConsentStatus.GDPR_CONSENT_GRANTED -> HyBid.getUserDataManager().grantConsent()
                 GdprConsentStatus.GDPR_CONSENT_DENIED -> HyBid.getUserDataManager().denyConsent()
                 GdprConsentStatus.GDPR_CONSENT_UNKNOWN -> {
-                    // We don't know the consent, let's have HyBid ask and show their consent screen.
+                    // We don't know the consent, let's have Verve ask and show their consent screen.
                     if (HyBid.getUserDataManager().shouldAskConsent()) {
                         val intent = HyBid.getUserDataManager().getConsentScreenIntent(context)
                         context.startActivity(intent)
@@ -385,11 +387,11 @@ class VerveAdapter : PartnerAdapter {
     }
 
     /**
-     * Find the most appropriate HyBid ad size for the given screen area based on height.
+     * Find the most appropriate Verve ad size for the given screen area based on height.
      *
      * @param size The [Size] to parse for conversion.
      *
-     * @return The HyBid ad size that best matches the given [Size].
+     * @return The Verve ad size that best matches the given [Size].
      */
     private fun getHyBidAdSize(size: Size?): AdSize {
         return size?.height?.let {
