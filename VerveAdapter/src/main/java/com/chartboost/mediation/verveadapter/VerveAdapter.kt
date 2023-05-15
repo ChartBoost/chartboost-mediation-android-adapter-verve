@@ -207,6 +207,10 @@ class VerveAdapter : PartnerAdapter {
             AdFormat.BANNER -> loadBannerAd(context, request, partnerAdListener)
             AdFormat.INTERSTITIAL -> loadInterstitialAd(context, request, partnerAdListener)
             AdFormat.REWARDED -> loadRewardedAd(context, request, partnerAdListener)
+            else -> {
+                PartnerLogController.log(LOAD_FAILED)
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT))
+            }
         }
     }
 
@@ -227,6 +231,10 @@ class VerveAdapter : PartnerAdapter {
                 Result.success(partnerAd)
             }
             AdFormat.INTERSTITIAL, AdFormat.REWARDED -> showFullScreenAd(partnerAd)
+            else -> {
+                PartnerLogController.log(SHOW_FAILED)
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_UNSUPPORTED_AD_FORMAT))
+            }
         }
     }
 
@@ -243,6 +251,10 @@ class VerveAdapter : PartnerAdapter {
         return when (partnerAd.request.format) {
             AdFormat.BANNER -> destroyBannerAd(partnerAd)
             AdFormat.INTERSTITIAL, AdFormat.REWARDED -> destroyFullscreenAd(partnerAd)
+            else -> {
+                PartnerLogController.log(INVALIDATE_FAILED)
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_UNSUPPORTED_AD_FORMAT))
+            }
         }
     }
 
