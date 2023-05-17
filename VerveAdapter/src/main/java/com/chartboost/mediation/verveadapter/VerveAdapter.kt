@@ -356,12 +356,13 @@ class VerveAdapter : PartnerAdapter {
         return suspendCancellableCoroutine { continuation ->
             val hyBidAdView = HyBidAdView(context)
             hyBidAdView.setAdSize(getHyBidAdSize(request.size))
-            val partnerAd = PartnerAd(
-                ad = hyBidAdView,
-                details = emptyMap(),
-                request = request
-            )
             val hyBidAdViewListener = object : HyBidAdView.Listener {
+                val partnerAd = PartnerAd(
+                    ad = hyBidAdView,
+                    details = emptyMap(),
+                    request = request
+                )
+
                 override fun onAdLoaded() {
                     PartnerLogController.log(LOAD_SUCCEEDED)
                     continuation.resume(
