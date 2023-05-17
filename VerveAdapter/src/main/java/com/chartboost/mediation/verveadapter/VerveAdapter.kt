@@ -13,7 +13,9 @@ import android.util.Size
 import com.chartboost.heliumsdk.domain.*
 import com.chartboost.heliumsdk.utils.PartnerLogController
 import com.chartboost.heliumsdk.utils.PartnerLogController.PartnerAdapterEvents.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -182,9 +184,12 @@ class VerveAdapter : PartnerAdapter {
         request: PreBidRequest
     ): Map<String, String> {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
-        PartnerLogController.log(BIDDER_INFO_FETCH_SUCCEEDED)
 
-        return emptyMap()
+        return withContext(Dispatchers.IO) {
+            val token = HyBid.getAppToken() ?: ""
+            PartnerLogController.log(if (token.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
+            mapOf("app_auth_token" to token)
+        }
     }
 
     /**
@@ -348,53 +353,55 @@ class VerveAdapter : PartnerAdapter {
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener
     ): Result<PartnerAd> {
-        return suspendCoroutine { continuation ->
+        return suspendCancellableCoroutine { continuation ->
             val hyBidAdView = HyBidAdView(context)
+            hyBidAdView.setAdSize(getHyBidAdSize(request.size))
             val partnerAd = PartnerAd(
                 ad = hyBidAdView,
                 details = emptyMap(),
                 request = request
             )
-            hyBidAdView.setAdSize(getHyBidAdSize(request.size))
-            hyBidAdView.load(
-                request.partnerPlacement,
-                object : HyBidAdView.Listener {
-                    override fun onAdLoaded() {
-                        PartnerLogController.log(LOAD_SUCCEEDED)
-                        continuation.resume(
-                            Result.success(partnerAd)
-                        )
-                    }
+            val hyBidAdViewListener = object : HyBidAdView.Listener {
+                override fun onAdLoaded() {
+                    PartnerLogController.log(LOAD_SUCCEEDED)
+                    continuation.resume(
+                        Result.success(partnerAd)
+                    )
+                }
 
-                    override fun onAdLoadFailed(error: Throwable?) {
-                        PartnerLogController.log(
-                            LOAD_FAILED,
-                            if (error != null) {
-                                "Message: ${error.message}\n Cause:${error.cause}"
-                            } else {
-                                "Throwable error is null."
-                            }
-                        )
-                        continuation.resume(
-                            Result.failure(
-                                ChartboostMediationAdException(
-                                    ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION
-                                )
+                override fun onAdLoadFailed(error: Throwable?) {
+                    PartnerLogController.log(
+                        LOAD_FAILED,
+                        if (error != null) {
+                            "Message: ${error.message}\n Cause:${error.cause}"
+                        } else {
+                            "Throwable error is null."
+                        }
+                    )
+                    continuation.resume(
+                        Result.failure(
+                            ChartboostMediationAdException(
+                                ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION
                             )
                         )
-                    }
-
-                    override fun onAdImpression() {
-                        PartnerLogController.log(DID_TRACK_IMPRESSION)
-                        listener.onPartnerAdImpression(partnerAd)
-                    }
-
-                    override fun onAdClick() {
-                        PartnerLogController.log(DID_CLICK)
-                        listener.onPartnerAdClicked(partnerAd)
-                    }
+                    )
                 }
-            )
+
+                override fun onAdImpression() {
+                    PartnerLogController.log(DID_TRACK_IMPRESSION)
+                    listener.onPartnerAdImpression(partnerAd)
+                }
+
+                override fun onAdClick() {
+                    PartnerLogController.log(DID_CLICK)
+                    listener.onPartnerAdClicked(partnerAd)
+                }
+            }
+
+            if (request.adm.isNullOrEmpty())
+                hyBidAdView.load(request.partnerPlacement, hyBidAdViewListener)
+            else
+                hyBidAdView.renderCustomMarkup(request.adm, hyBidAdViewListener)
         }
     }
 
@@ -430,16 +437,17 @@ class VerveAdapter : PartnerAdapter {
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener
     ): Result<PartnerAd> {
-        return suspendCoroutine { continuation ->
-            val partnerAd = PartnerAd(
-                ad = request.identifier,
-                details = emptyMap(),
-                request = request
-            )
+        return suspendCancellableCoroutine { continuation ->
             HyBidInterstitialAd(
                 context,
                 request.partnerPlacement,
                 object : HyBidInterstitialAd.Listener {
+                    val partnerAd = PartnerAd(
+                        ad = request.identifier,
+                        details = emptyMap(),
+                        request = request
+                    )
+
                     override fun onInterstitialLoaded() {
                         PartnerLogController.log(LOAD_SUCCEEDED)
                         continuation.resume(
@@ -463,7 +471,8 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onInterstitialImpression() {
-                        onShowSuccess()
+                        PartnerLogController.log(DID_TRACK_IMPRESSION)
+                        listener.onPartnerAdImpression(partnerAd)
                     }
 
                     override fun onInterstitialDismissed() {
@@ -479,7 +488,10 @@ class VerveAdapter : PartnerAdapter {
                 }
             ).also {
                 hyBidInterstitialAdMap[request.identifier] = it
-                it.load()
+                if (request.adm.isNullOrEmpty())
+                    it.load()
+                else
+                    it.prepareCustomMarkup(request.adm)
             }
         }
     }
@@ -498,16 +510,17 @@ class VerveAdapter : PartnerAdapter {
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener
     ): Result<PartnerAd> {
-        return suspendCoroutine { continuation ->
-            val partnerAd = PartnerAd(
-                ad = request.identifier,
-                details = emptyMap(),
-                request = request
-            )
+        return suspendCancellableCoroutine { continuation ->
             HyBidRewardedAd(
                 context,
                 request.partnerPlacement,
                 object : HyBidRewardedAd.Listener {
+                    val partnerAd = PartnerAd(
+                        ad = request.identifier,
+                        details = emptyMap(),
+                        request = request
+                    )
+
                     override fun onRewardedLoaded() {
                         PartnerLogController.log(LOAD_SUCCEEDED)
                         continuation.resume(Result.success(partnerAd))
@@ -529,7 +542,8 @@ class VerveAdapter : PartnerAdapter {
                     }
 
                     override fun onRewardedOpened() {
-                        onShowSuccess()
+                        PartnerLogController.log(DID_TRACK_IMPRESSION)
+                        listener.onPartnerAdImpression(partnerAd)
                     }
 
                     override fun onRewardedClosed() {
@@ -550,7 +564,10 @@ class VerveAdapter : PartnerAdapter {
                 }
             ).also {
                 hyBidRewardedAdMap[request.identifier] = it
-                it.load()
+                if (request.adm.isNullOrEmpty())
+                    it.load()
+                else
+                    it.prepareCustomMarkup(request.adm)
             }
         }
     }
@@ -565,11 +582,17 @@ class VerveAdapter : PartnerAdapter {
      */
     private suspend fun showFullScreenAd(partnerAd: PartnerAd): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
+            onShowSuccess = {
+                PartnerLogController.log(SHOW_SUCCEEDED)
+                continuation.resume(Result.success(partnerAd))
+            }
+
             when (partnerAd.request.format) {
                 AdFormat.INTERSTITIAL -> {
                     hyBidInterstitialAdMap[partnerAd.request.identifier]?.let {
                         if (it.isReady) {
                             it.show()
+                            onShowSuccess()
                         } else {
                             PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
                             continuation.resume(
@@ -595,6 +618,7 @@ class VerveAdapter : PartnerAdapter {
                     hyBidRewardedAdMap[partnerAd.request.identifier]?.let {
                         if (it.isReady) {
                             it.show()
+                            onShowSuccess()
                         } else {
                             PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
                             continuation.resume(
@@ -626,11 +650,6 @@ class VerveAdapter : PartnerAdapter {
                         )
                     )
                 }
-            }
-
-            onShowSuccess = {
-                PartnerLogController.log(SHOW_SUCCEEDED)
-                continuation.resume(Result.success(partnerAd))
             }
 
         } ?: run {
