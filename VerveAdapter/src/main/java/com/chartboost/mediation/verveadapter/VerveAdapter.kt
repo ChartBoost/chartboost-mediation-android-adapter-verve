@@ -363,14 +363,27 @@ class VerveAdapter : PartnerAdapter {
                     request = request
                 )
 
+                var hasContinuationFired = false
+
                 override fun onAdLoaded() {
+                    if (hasContinuationFired) {
+                        PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
+                        return
+                    }
+
                     PartnerLogController.log(LOAD_SUCCEEDED)
+                    hasContinuationFired = true
                     continuation.resume(
                         Result.success(partnerAd)
                     )
                 }
 
                 override fun onAdLoadFailed(error: Throwable?) {
+                    if (hasContinuationFired) {
+                        PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
+                        return
+                    }
+
                     PartnerLogController.log(
                         LOAD_FAILED,
                         if (error != null) {
@@ -379,6 +392,7 @@ class VerveAdapter : PartnerAdapter {
                             "Throwable error is null."
                         }
                     )
+                    hasContinuationFired = true
                     continuation.resume(
                         Result.failure(
                             ChartboostMediationAdException(
@@ -449,14 +463,27 @@ class VerveAdapter : PartnerAdapter {
                         request = request
                     )
 
+                    var hasContinuationFired = false
+
                     override fun onInterstitialLoaded() {
+                        if (hasContinuationFired) {
+                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
+                            return
+                        }
+
                         PartnerLogController.log(LOAD_SUCCEEDED)
+                        hasContinuationFired = true
                         continuation.resume(
                             Result.success(partnerAd)
                         )
                     }
 
                     override fun onInterstitialLoadFailed(error: Throwable?) {
+                        if (hasContinuationFired) {
+                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
+                            return
+                        }
+
                         PartnerLogController.log(
                             LOAD_FAILED,
                             if (error != null) {
@@ -466,6 +493,7 @@ class VerveAdapter : PartnerAdapter {
                             }
                         )
                         hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
+                        hasContinuationFired = true
                         continuation.resume(
                             Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
                         )
@@ -522,12 +550,25 @@ class VerveAdapter : PartnerAdapter {
                         request = request
                     )
 
+                    var hasContinuationFired = false
+
                     override fun onRewardedLoaded() {
+                        if (hasContinuationFired) {
+                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
+                            return
+                        }
+
                         PartnerLogController.log(LOAD_SUCCEEDED)
+                        hasContinuationFired = true
                         continuation.resume(Result.success(partnerAd))
                     }
 
                     override fun onRewardedLoadFailed(error: Throwable?) {
+                        if (hasContinuationFired) {
+                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
+                            return
+                        }
+
                         PartnerLogController.log(
                             LOAD_FAILED,
                             if (error != null) {
@@ -536,7 +577,9 @@ class VerveAdapter : PartnerAdapter {
                                 "Throwable error is null."
                             }
                         )
+
                         hyBidRewardedAdMap.remove(partnerAd.request.identifier)
+                        hasContinuationFired = true
                         continuation.resume(
                             Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
                         )
