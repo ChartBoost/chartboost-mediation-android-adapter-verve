@@ -122,6 +122,8 @@ class VerveAdapter : PartnerAdapter {
         partnerConfiguration: PartnerConfiguration
     ): Result<Unit> {
         PartnerLogController.log(SETUP_STARTED)
+        hyBidInterstitialAdMap.clear()
+        hyBidRewardedAdMap.clear()
 
         return suspendCoroutine { continuation ->
             Json.decodeFromJsonElement<String>(
