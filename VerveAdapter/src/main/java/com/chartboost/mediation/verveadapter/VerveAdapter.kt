@@ -25,6 +25,7 @@ import net.pubnative.lite.sdk.models.AdSize
 import net.pubnative.lite.sdk.rewarded.HyBidRewardedAd
 import net.pubnative.lite.sdk.utils.Logger
 import net.pubnative.lite.sdk.views.HyBidAdView
+import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -76,11 +77,6 @@ class VerveAdapter : PartnerAdapter {
     private val hyBidRewardedAdMap = mutableMapOf<String, HyBidRewardedAd>()
 
     /**
-     * Lambda to be called for a successful Verve ad dismiss.
-     */
-    private var onShowSuccess: () -> Unit = {}
-
-    /**
      * Get the Verve SDK version.
      */
     override val partnerSdkVersion: String
@@ -126,8 +122,6 @@ class VerveAdapter : PartnerAdapter {
         partnerConfiguration: PartnerConfiguration
     ): Result<Unit> {
         PartnerLogController.log(SETUP_STARTED)
-        hyBidInterstitialAdMap.clear()
-        hyBidRewardedAdMap.clear()
 
         return suspendCoroutine { continuation ->
             Json.decodeFromJsonElement<String>(
@@ -456,65 +450,7 @@ class VerveAdapter : PartnerAdapter {
             HyBidInterstitialAd(
                 context,
                 request.partnerPlacement,
-                object : HyBidInterstitialAd.Listener {
-                    val partnerAd = PartnerAd(
-                        ad = request.identifier,
-                        details = emptyMap(),
-                        request = request
-                    )
-
-                    var hasContinuationFired = false
-
-                    override fun onInterstitialLoaded() {
-                        if (hasContinuationFired) {
-                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
-                            return
-                        }
-
-                        PartnerLogController.log(LOAD_SUCCEEDED)
-                        hasContinuationFired = true
-                        continuation.resume(
-                            Result.success(partnerAd)
-                        )
-                    }
-
-                    override fun onInterstitialLoadFailed(error: Throwable?) {
-                        if (hasContinuationFired) {
-                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
-                            return
-                        }
-
-                        PartnerLogController.log(
-                            LOAD_FAILED,
-                            if (error != null) {
-                                "Message: ${error.message}\n Cause:${error.cause}"
-                            } else {
-                                "Throwable error is null."
-                            }
-                        )
-                        hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
-                        hasContinuationFired = true
-                        continuation.resume(
-                            Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
-                        )
-                    }
-
-                    override fun onInterstitialImpression() {
-                        PartnerLogController.log(DID_TRACK_IMPRESSION)
-                        listener.onPartnerAdImpression(partnerAd)
-                    }
-
-                    override fun onInterstitialDismissed() {
-                        PartnerLogController.log(DID_DISMISS)
-                        hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
-                        listener.onPartnerAdDismissed(partnerAd, null)
-                    }
-
-                    override fun onInterstitialClick() {
-                        PartnerLogController.log(DID_CLICK)
-                        listener.onPartnerAdClicked(partnerAd)
-                    }
-                }
+                buildInterstitialAdListener(request, listener, continuation)
             ).also {
                 hyBidInterstitialAdMap[request.identifier] = it
                 if (request.adm.isNullOrEmpty())
@@ -522,6 +458,66 @@ class VerveAdapter : PartnerAdapter {
                 else
                     it.prepareCustomMarkup(request.adm)
             }
+        }
+    }
+
+    /**
+     * Build a [HyBidInterstitialAd.Listener] listener and return it.
+     *
+     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
+     * @param continuation A [Continuation] to notify Chartboost Mediation of load success or failure.
+     *
+     * @return A built [HyBidInterstitialAd.Listener] listener.
+     */
+    private fun buildInterstitialAdListener(
+        request: PartnerAdLoadRequest,
+        listener: PartnerAdListener,
+        continuation: Continuation<Result<PartnerAd>>
+    ) = object : HyBidInterstitialAd.Listener {
+        val partnerAd = PartnerAd(
+            ad = request.identifier,
+            details = emptyMap(),
+            request = request
+        )
+
+        override fun onInterstitialLoaded() {
+            PartnerLogController.log(LOAD_SUCCEEDED)
+            continuation.resume(
+                Result.success(partnerAd)
+            )
+        }
+
+        override fun onInterstitialLoadFailed(error: Throwable?) {
+            PartnerLogController.log(
+                LOAD_FAILED,
+                if (error != null) {
+                    "Message: ${error.message}\n Cause:${error.cause}"
+                } else {
+                    "Throwable error is null."
+                }
+            )
+
+            hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
+            continuation.resume(
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
+            )
+        }
+
+        override fun onInterstitialImpression() {
+            PartnerLogController.log(DID_TRACK_IMPRESSION)
+            listener.onPartnerAdImpression(partnerAd)
+        }
+
+        override fun onInterstitialDismissed() {
+            PartnerLogController.log(DID_DISMISS)
+            hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
+            listener.onPartnerAdDismissed(partnerAd, null)
+        }
+
+        override fun onInterstitialClick() {
+            PartnerLogController.log(DID_CLICK)
+            listener.onPartnerAdClicked(partnerAd)
         }
     }
 
@@ -543,69 +539,7 @@ class VerveAdapter : PartnerAdapter {
             HyBidRewardedAd(
                 context,
                 request.partnerPlacement,
-                object : HyBidRewardedAd.Listener {
-                    val partnerAd = PartnerAd(
-                        ad = request.identifier,
-                        details = emptyMap(),
-                        request = request
-                    )
-
-                    var hasContinuationFired = false
-
-                    override fun onRewardedLoaded() {
-                        if (hasContinuationFired) {
-                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
-                            return
-                        }
-
-                        PartnerLogController.log(LOAD_SUCCEEDED)
-                        hasContinuationFired = true
-                        continuation.resume(Result.success(partnerAd))
-                    }
-
-                    override fun onRewardedLoadFailed(error: Throwable?) {
-                        if (hasContinuationFired) {
-                            PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
-                            return
-                        }
-
-                        PartnerLogController.log(
-                            LOAD_FAILED,
-                            if (error != null) {
-                                "Message: ${error.message}\n Cause:${error.cause}"
-                            } else {
-                                "Throwable error is null."
-                            }
-                        )
-
-                        hyBidRewardedAdMap.remove(partnerAd.request.identifier)
-                        hasContinuationFired = true
-                        continuation.resume(
-                            Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
-                        )
-                    }
-
-                    override fun onRewardedOpened() {
-                        PartnerLogController.log(DID_TRACK_IMPRESSION)
-                        listener.onPartnerAdImpression(partnerAd)
-                    }
-
-                    override fun onRewardedClosed() {
-                        PartnerLogController.log(DID_DISMISS)
-                        hyBidRewardedAdMap.remove(partnerAd.request.identifier)
-                        listener.onPartnerAdDismissed(partnerAd, null)
-                    }
-
-                    override fun onRewardedClick() {
-                        PartnerLogController.log(DID_CLICK)
-                        listener.onPartnerAdClicked(partnerAd)
-                    }
-
-                    override fun onReward() {
-                        PartnerLogController.log(DID_REWARD)
-                        listener.onPartnerAdRewarded(partnerAd)
-                    }
-                }
+                buildRewardedAdListener(request, listener, continuation)
             ).also {
                 hyBidRewardedAdMap[request.identifier] = it
                 if (request.adm.isNullOrEmpty())
@@ -616,6 +550,67 @@ class VerveAdapter : PartnerAdapter {
         }
     }
 
+    /**
+     * Build a [HyBidRewardedAd.Listener] listener and return it.
+     *
+     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
+     * @param continuation A [Continuation] to notify Chartboost Mediation of load success or failure.
+     *
+     * @return A built [HyBidRewardedAd.Listener] listener.
+     */
+    private fun buildRewardedAdListener(
+        request: PartnerAdLoadRequest,
+        listener: PartnerAdListener,
+        continuation: Continuation<Result<PartnerAd>>
+    ) = object : HyBidRewardedAd.Listener {
+        val partnerAd = PartnerAd(
+            ad = request.identifier,
+            details = emptyMap(),
+            request = request
+        )
+
+        override fun onRewardedLoaded() {
+            PartnerLogController.log(LOAD_SUCCEEDED)
+            continuation.resume(Result.success(partnerAd))
+        }
+
+        override fun onRewardedLoadFailed(error: Throwable?) {
+            PartnerLogController.log(
+                LOAD_FAILED,
+                if (error != null) {
+                    "Message: ${error.message}\n Cause:${error.cause}"
+                } else {
+                    "Throwable error is null."
+                }
+            )
+
+            continuation.resume(
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
+            )
+        }
+
+        override fun onRewardedOpened() {
+            PartnerLogController.log(DID_TRACK_IMPRESSION)
+            listener.onPartnerAdImpression(partnerAd)
+        }
+
+        override fun onRewardedClosed() {
+            PartnerLogController.log(DID_DISMISS)
+            hyBidRewardedAdMap.remove(partnerAd.request.identifier)
+            listener.onPartnerAdDismissed(partnerAd, null)
+        }
+
+        override fun onRewardedClick() {
+            PartnerLogController.log(DID_CLICK)
+            listener.onPartnerAdClicked(partnerAd)
+        }
+
+        override fun onReward() {
+            PartnerLogController.log(DID_REWARD)
+            listener.onPartnerAdRewarded(partnerAd)
+        }
+    }
 
     /**
      * Attempt to show a Verve fullscreen ad.
@@ -626,17 +621,13 @@ class VerveAdapter : PartnerAdapter {
      */
     private suspend fun showFullScreenAd(partnerAd: PartnerAd): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            onShowSuccess = {
-                PartnerLogController.log(SHOW_SUCCEEDED)
-                continuation.resume(Result.success(partnerAd))
-            }
-
             when (partnerAd.request.format) {
                 AdFormat.INTERSTITIAL -> {
                     hyBidInterstitialAdMap[partnerAd.request.identifier]?.let {
                         if (it.isReady) {
                             it.show()
-                            onShowSuccess()
+                            PartnerLogController.log(SHOW_SUCCEEDED)
+                            continuation.resume(Result.success(partnerAd))
                         } else {
                             PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
                             continuation.resume(
@@ -662,7 +653,8 @@ class VerveAdapter : PartnerAdapter {
                     hyBidRewardedAdMap[partnerAd.request.identifier]?.let {
                         if (it.isReady) {
                             it.show()
-                            onShowSuccess()
+                            PartnerLogController.log(SHOW_SUCCEEDED)
+                            continuation.resume(Result.success(partnerAd))
                         } else {
                             PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
                             continuation.resume(
