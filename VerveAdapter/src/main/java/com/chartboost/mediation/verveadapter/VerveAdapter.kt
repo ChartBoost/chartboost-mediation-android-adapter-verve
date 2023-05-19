@@ -40,8 +40,8 @@ class VerveAdapter : PartnerAdapter {
          */
         var testModeEnabled = HyBid.isTestMode()
             set(value) {
-                field = value
                 HyBid.setTestMode(value)
+                field = value
                 PartnerLogController.log(
                     CUSTOM,
                     "Verve SDK test mode is ${if (value) "enabled" else "disabled"}."
@@ -53,8 +53,8 @@ class VerveAdapter : PartnerAdapter {
          */
         var logLevel = Logger.Level.info
             set(value) {
-                field = value
                 HyBid.setLogLevel(value)
+                field = value
                 PartnerLogController.log(CUSTOM, "Verve SDK log level set to $value.")
             }
 
@@ -131,26 +131,28 @@ class VerveAdapter : PartnerAdapter {
             )
                 .trim()
                 .takeIf { it.isNotEmpty() }?.let { appToken ->
-                    (context.applicationContext as Application).let { application ->
-                        HyBid.initialize(appToken, application) { success ->
-                            when (success) {
-                                true -> {
-                                    continuation.resume(
-                                        Result.success(
-                                            PartnerLogController.log(SETUP_SUCCEEDED)
+                    HyBid.initialize(
+                        appToken,
+                        context.applicationContext as Application
+                    ) { success ->
+                        when (success) {
+                            true -> {
+                                continuation.resume(
+                                    Result.success(
+                                        PartnerLogController.log(SETUP_SUCCEEDED)
+                                    )
+                                )
+                            }
+
+                            false -> {
+                                PartnerLogController.log(SETUP_FAILED)
+                                continuation.resume(
+                                    Result.failure(
+                                        ChartboostMediationAdException(
+                                            ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN
                                         )
                                     )
-                                }
-                                false -> {
-                                    PartnerLogController.log(SETUP_FAILED)
-                                    continuation.resume(
-                                        Result.failure(
-                                            ChartboostMediationAdException(
-                                                ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN
-                                            )
-                                        )
-                                    )
-                                }
+                                )
                             }
                         }
                     }
@@ -253,8 +255,8 @@ class VerveAdapter : PartnerAdapter {
             AdFormat.BANNER -> destroyBannerAd(partnerAd)
             AdFormat.INTERSTITIAL, AdFormat.REWARDED -> destroyFullscreenAd(partnerAd)
             else -> {
-                PartnerLogController.log(INVALIDATE_FAILED)
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_UNSUPPORTED_AD_FORMAT))
+                PartnerLogController.log(INVALIDATE_SUCCEEDED)
+                Result.success(partnerAd)
             }
         }
     }

@@ -5,7 +5,7 @@ The Chartboost Mediation Verve adapter mediates HyBid via the Chartboost Mediati
 ## Minimum Requirements
 
 | Plugin                   | Version |
-| ------------------------ | ------- |
+|--------------------------|---------|
 | Chartboost Mediation SDK | 4.0.0+  |
 | Android API              | 21+     |
 
