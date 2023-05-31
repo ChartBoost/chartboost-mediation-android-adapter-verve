@@ -353,27 +353,14 @@ class VerveAdapter : PartnerAdapter {
                     request = request
                 )
 
-                var hasContinuationFired = false
-
                 override fun onAdLoaded() {
-                    if (hasContinuationFired) {
-                        PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
-                        return
-                    }
-
                     PartnerLogController.log(LOAD_SUCCEEDED)
-                    hasContinuationFired = true
                     continuation.resume(
                         Result.success(partnerAd)
                     )
                 }
 
                 override fun onAdLoadFailed(error: Throwable?) {
-                    if (hasContinuationFired) {
-                        PartnerLogController.log(CUSTOM, "A continuation has already been fired.")
-                        return
-                    }
-
                     PartnerLogController.log(
                         LOAD_FAILED,
                         if (error != null) {
@@ -382,7 +369,6 @@ class VerveAdapter : PartnerAdapter {
                             "Throwable error is null."
                         }
                     )
-                    hasContinuationFired = true
                     continuation.resume(
                         Result.failure(
                             ChartboostMediationAdException(
