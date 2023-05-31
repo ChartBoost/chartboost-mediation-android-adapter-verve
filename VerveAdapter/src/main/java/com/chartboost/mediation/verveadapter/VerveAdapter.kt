@@ -65,14 +65,12 @@ class VerveAdapter : PartnerAdapter {
     }
 
     /**
-     * A map of Verve HyBidAdInterstitial ads for the corresponding Chartboost Mediation
-     * load id.
+     * A map of Chartboost Mediation load identifiers with their corresponding Verve HyBidAdInterstitial ads.
      */
     private val hyBidInterstitialAdMap = mutableMapOf<String, HyBidInterstitialAd>()
 
     /**
-     * A map of Verve HyBidRewardedAd ads for the corresponding Chartboost Mediation
-     * load id.
+     * A map of Chartboost Mediation load identifiers with their corresponding Verve HyBidRewardedAd ads.
      */
     private val hyBidRewardedAdMap = mutableMapOf<String, HyBidRewardedAd>()
 
