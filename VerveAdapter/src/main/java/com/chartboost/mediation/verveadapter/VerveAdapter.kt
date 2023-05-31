@@ -293,13 +293,7 @@ class VerveAdapter : PartnerAdapter {
             when (gdprConsentStatus) {
                 GdprConsentStatus.GDPR_CONSENT_GRANTED -> HyBid.getUserDataManager().grantConsent()
                 GdprConsentStatus.GDPR_CONSENT_DENIED -> HyBid.getUserDataManager().denyConsent()
-                GdprConsentStatus.GDPR_CONSENT_UNKNOWN -> {
-                    // We don't know the consent, let's have Verve ask and show their consent screen.
-                    if (HyBid.getUserDataManager().shouldAskConsent()) {
-                        val intent = HyBid.getUserDataManager().getConsentScreenIntent(context)
-                        context.startActivity(intent)
-                    }
-                }
+                else -> {}
             }
         }
     }
