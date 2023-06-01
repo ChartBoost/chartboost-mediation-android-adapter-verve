@@ -368,7 +368,7 @@ class VerveAdapter : PartnerAdapter {
                     PartnerLogController.log(
                         LOAD_FAILED,
                         if (error != null) {
-                            "Message: ${error.message}\n Cause:${error.cause}"
+                            "Message: ${error.message}\nCause:${error.cause}"
                         } else {
                             "Throwable error is null."
                         }
@@ -482,7 +482,7 @@ class VerveAdapter : PartnerAdapter {
             PartnerLogController.log(
                 LOAD_FAILED,
                 if (error != null) {
-                    "Message: ${error.message}\n Cause:${error.cause}"
+                    "Message: ${error.message}\nCause:${error.cause}"
                 } else {
                     "Throwable error is null."
                 }
@@ -571,7 +571,7 @@ class VerveAdapter : PartnerAdapter {
             PartnerLogController.log(
                 LOAD_FAILED,
                 if (error != null) {
-                    "Message: ${error.message}\n Cause:${error.cause}"
+                    "Message: ${error.message}\nCause:${error.cause}"
                 } else {
                     "Throwable error is null."
                 }
