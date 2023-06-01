@@ -67,12 +67,12 @@ class VerveAdapter : PartnerAdapter {
     /**
      * A map of Chartboost Mediation load identifiers with their corresponding Verve HyBidAdInterstitial ads.
      */
-    private val hyBidInterstitialAdMap = mutableMapOf<String, HyBidInterstitialAd>()
+    private val loadIdToHyBidInterstitialAds = mutableMapOf<String, HyBidInterstitialAd>()
 
     /**
      * A map of Chartboost Mediation load identifiers with their corresponding Verve HyBidRewardedAd ads.
      */
-    private val hyBidRewardedAdMap = mutableMapOf<String, HyBidRewardedAd>()
+    private val loadIdToHyBidRewardedAds = mutableMapOf<String, HyBidRewardedAd>()
 
     /**
      * Get the Verve SDK version.
@@ -120,49 +120,29 @@ class VerveAdapter : PartnerAdapter {
         partnerConfiguration: PartnerConfiguration
     ): Result<Unit> {
         PartnerLogController.log(SETUP_STARTED)
-        hyBidInterstitialAdMap.clear()
-        hyBidRewardedAdMap.clear()
+        loadIdToHyBidInterstitialAds.clear()
+        loadIdToHyBidRewardedAds.clear()
 
         return suspendCoroutine { continuation ->
-            Json.decodeFromJsonElement<String>(
-                (partnerConfiguration.credentials as JsonObject).getValue(APP_TOKEN_KEY)
-            )
+            Json.decodeFromJsonElement<String>((partnerConfiguration.credentials as JsonObject).getValue(APP_TOKEN_KEY))
                 .trim()
-                .takeIf { it.isNotEmpty() }?.let { appToken ->
+                .takeIf { it.isNotEmpty() }
+                ?.let { appToken ->
                     HyBid.initialize(
                         appToken,
                         context.applicationContext as Application
                     ) { success ->
                         when (success) {
-                            true -> {
-                                continuation.resume(
-                                    Result.success(
-                                        PartnerLogController.log(SETUP_SUCCEEDED)
-                                    )
-                                )
-                            }
-
+                            true -> continuation.resume(Result.success(PartnerLogController.log(SETUP_SUCCEEDED)))
                             false -> {
                                 PartnerLogController.log(SETUP_FAILED)
-                                continuation.resume(
-                                    Result.failure(
-                                        ChartboostMediationAdException(
-                                            ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN
-                                        )
-                                    )
-                                )
+                                continuation.resume(Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN)))
                             }
                         }
                     }
                 } ?: run {
                 PartnerLogController.log(SETUP_FAILED, "Missing app token.")
-                continuation.resumeWith(
-                    Result.failure(
-                        ChartboostMediationAdException(
-                            ChartboostMediationError.CM_INITIALIZATION_FAILURE_INVALID_CREDENTIALS
-                        )
-                    )
-                )
+                continuation.resumeWith(Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_INVALID_CREDENTIALS)))
             }
         }
     }
@@ -192,7 +172,7 @@ class VerveAdapter : PartnerAdapter {
      * Attempt to load a Verve ad.
      *
      * @param context The current [Context].
-     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param request The [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
      * @param partnerAdListener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
      *
      * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
@@ -231,7 +211,14 @@ class VerveAdapter : PartnerAdapter {
                 PartnerLogController.log(SHOW_SUCCEEDED)
                 Result.success(partnerAd)
             }
-            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> showFullScreenAd(partnerAd)
+            AdFormat.INTERSTITIAL -> showFullscreenAd(
+                loadIdToHyBidInterstitialAds[partnerAd.request.identifier],
+                partnerAd
+            )
+            AdFormat.REWARDED -> showFullscreenAd(
+                loadIdToHyBidRewardedAds[partnerAd.request.identifier],
+                partnerAd
+            )
             else -> {
                 PartnerLogController.log(SHOW_FAILED)
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_UNSUPPORTED_AD_FORMAT))
@@ -251,7 +238,14 @@ class VerveAdapter : PartnerAdapter {
 
         return when (partnerAd.request.format) {
             AdFormat.BANNER -> destroyBannerAd(partnerAd)
-            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> destroyFullscreenAd(partnerAd)
+            AdFormat.INTERSTITIAL -> destroyFullscreenAd(
+                loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier),
+                partnerAd
+            )
+            AdFormat.REWARDED -> destroyFullscreenAd(
+                loadIdToHyBidRewardedAds.remove(partnerAd.request.identifier),
+                partnerAd
+            )
             else -> {
                 PartnerLogController.log(INVALIDATE_SUCCEEDED)
                 Result.success(partnerAd)
@@ -293,6 +287,8 @@ class VerveAdapter : PartnerAdapter {
                 GdprConsentStatus.GDPR_CONSENT_DENIED -> HyBid.getUserDataManager().denyConsent()
                 else -> {}
             }
+        } else {
+            PartnerLogController.log(CUSTOM, "Cannot set GDPR: The HyBid SDK is not initialized.")
         }
     }
 
@@ -312,7 +308,11 @@ class VerveAdapter : PartnerAdapter {
             if (hasGrantedCcpaConsent) CCPA_CONSENT_GRANTED
             else CCPA_CONSENT_DENIED
         )
-        if (HyBid.isInitialized()) HyBid.getUserDataManager().iabusPrivacyString = privacyString
+        if (HyBid.isInitialized()) {
+            HyBid.getUserDataManager().iabusPrivacyString = privacyString
+        } else {
+            PartnerLogController.log(CUSTOM, "Cannot set CCPA: The HyBid SDK is not initialized.")
+        }
     }
 
     /**
@@ -326,14 +326,18 @@ class VerveAdapter : PartnerAdapter {
             if (isSubjectToCoppa) COPPA_SUBJECT
             else COPPA_NOT_SUBJECT
         )
-        if (HyBid.isInitialized()) HyBid.setCoppaEnabled(isSubjectToCoppa)
+        if (HyBid.isInitialized()) {
+            HyBid.setCoppaEnabled(isSubjectToCoppa)
+        } else {
+            PartnerLogController.log(CUSTOM, "Cannot set COPPA: The HyBid SDK is not initialized.")
+        }
     }
 
     /**
      * Attempt to load a Verve banner ad.
      *
      * @param context The current [Context].
-     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param request The [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
      * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
      *
      * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
@@ -389,10 +393,12 @@ class VerveAdapter : PartnerAdapter {
                 }
             }
 
-            if (request.adm.isNullOrEmpty())
+            if (request.adm.isNullOrEmpty()) {
                 hyBidAdView.load(request.partnerPlacement, hyBidAdViewListener)
-            else
+            }
+            else {
                 hyBidAdView.renderCustomMarkup(request.adm, hyBidAdViewListener)
+            }
         }
     }
 
@@ -418,7 +424,7 @@ class VerveAdapter : PartnerAdapter {
      * Attempt to load a Verve interstitial ad.
      *
      * @param context The current [Context].
-     * @param request An [PartnerAdLoadRequest] instance containing data to load the ad with.
+     * @param request The [PartnerAdLoadRequest] instance containing data to load the ad with.
      * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
      *
      * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
@@ -434,11 +440,13 @@ class VerveAdapter : PartnerAdapter {
                 request.partnerPlacement,
                 buildInterstitialAdListener(request, listener, continuation)
             ).also {
-                hyBidInterstitialAdMap[request.identifier] = it
-                if (request.adm.isNullOrEmpty())
+                loadIdToHyBidInterstitialAds[request.identifier] = it
+                if (request.adm.isNullOrEmpty()) {
                     it.load()
-                else
+                }
+                else {
                     it.prepareCustomMarkup(request.adm)
+                }
             }
         }
     }
@@ -446,7 +454,7 @@ class VerveAdapter : PartnerAdapter {
     /**
      * Build a [HyBidInterstitialAd.Listener] listener and return it.
      *
-     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param request The [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
      * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
      * @param continuation A [Continuation] to notify Chartboost Mediation of load success or failure.
      *
@@ -480,7 +488,7 @@ class VerveAdapter : PartnerAdapter {
                 }
             )
 
-            hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
+            loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)
             continuation.resume(
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
             )
@@ -493,7 +501,7 @@ class VerveAdapter : PartnerAdapter {
 
         override fun onInterstitialDismissed() {
             PartnerLogController.log(DID_DISMISS)
-            hyBidInterstitialAdMap.remove(partnerAd.request.identifier)
+            loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)
             listener.onPartnerAdDismissed(partnerAd, null)
         }
 
@@ -523,11 +531,13 @@ class VerveAdapter : PartnerAdapter {
                 request.partnerPlacement,
                 buildRewardedAdListener(request, listener, continuation)
             ).also {
-                hyBidRewardedAdMap[request.identifier] = it
-                if (request.adm.isNullOrEmpty())
+                loadIdToHyBidRewardedAds[request.identifier] = it
+                if (request.adm.isNullOrEmpty()) {
                     it.load()
-                else
+                }
+                else {
                     it.prepareCustomMarkup(request.adm)
+                }
             }
         }
     }
@@ -535,7 +545,7 @@ class VerveAdapter : PartnerAdapter {
     /**
      * Build a [HyBidRewardedAd.Listener] listener and return it.
      *
-     * @param request An [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
+     * @param request The [PartnerAdLoadRequest] instance containing relevant data for the current ad load call.
      * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
      * @param continuation A [Continuation] to notify Chartboost Mediation of load success or failure.
      *
@@ -579,7 +589,7 @@ class VerveAdapter : PartnerAdapter {
 
         override fun onRewardedClosed() {
             PartnerLogController.log(DID_DISMISS)
-            hyBidRewardedAdMap.remove(partnerAd.request.identifier)
+            loadIdToHyBidRewardedAds.remove(partnerAd.request.identifier)
             listener.onPartnerAdDismissed(partnerAd, null)
         }
 
@@ -597,119 +607,62 @@ class VerveAdapter : PartnerAdapter {
     /**
      * Attempt to show a Verve fullscreen ad.
      *
-     * @param partnerAd The [PartnerAd] object containing the ad to be shown.
+     * @param fullscreenAd The fullscreen ad that will be shown.
+     * @param partnerAd The [PartnerAd] object containing the partner ad to report its show result.
      *
      * @return Result.success(PartnerAd) if the ad was successfully shown, Result.failure(Exception) otherwise.
      */
-    private suspend fun showFullScreenAd(partnerAd: PartnerAd): Result<PartnerAd> {
-        return suspendCancellableCoroutine { continuation ->
-            when (partnerAd.request.format) {
-                AdFormat.INTERSTITIAL -> {
-                    hyBidInterstitialAdMap[partnerAd.request.identifier]?.let {
-                        if (it.isReady) {
-                            it.show()
-                            PartnerLogController.log(SHOW_SUCCEEDED)
-                            continuation.resume(Result.success(partnerAd))
-                        } else {
-                            PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
-                            continuation.resume(
-                                Result.failure(
-                                    ChartboostMediationAdException(
-                                        ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY
-                                    )
-                                )
-                            )
-                        }
-                    } ?: run {
-                        PartnerLogController.log(SHOW_FAILED, "Ad is null.")
-                        continuation.resume(
-                            Result.failure(
-                                ChartboostMediationAdException(
-                                    ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_FOUND
-                                )
-                            )
-                        )
-                    }
-                }
-                AdFormat.REWARDED -> {
-                    hyBidRewardedAdMap[partnerAd.request.identifier]?.let {
-                        if (it.isReady) {
-                            it.show()
-                            PartnerLogController.log(SHOW_SUCCEEDED)
-                            continuation.resume(Result.success(partnerAd))
-                        } else {
-                            PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
-                            continuation.resume(
-                                Result.failure(
-                                    ChartboostMediationAdException(
-                                        ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY
-                                    )
-                                )
-                            )
-                        }
-                    } ?: run {
-                        PartnerLogController.log(SHOW_FAILED, "Ad is null.")
-                        continuation.resume(
-                            Result.failure(
-                                ChartboostMediationAdException(
-                                    ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_FOUND
-                                )
-                            )
-                        )
-                    }
-                }
-                else -> {
-                    PartnerLogController.log(SHOW_FAILED, "Ad is not a fullscreen ad.")
-                    continuation.resume(
-                        Result.failure(
-                            ChartboostMediationAdException(
-                                ChartboostMediationError.CM_SHOW_FAILURE_UNSUPPORTED_AD_FORMAT
-                            )
-                        )
-                    )
+    private fun showFullscreenAd(fullscreenAd: Any?, partnerAd: PartnerAd): Result<PartnerAd> {
+        return when (fullscreenAd) {
+            is HyBidInterstitialAd -> {
+                if (fullscreenAd.isReady) {
+                    fullscreenAd.show()
+                    PartnerLogController.log(SHOW_SUCCEEDED)
+                    Result.success(partnerAd)
+                } else {
+                    PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY))
                 }
             }
-
-        } ?: run {
-            PartnerLogController.log(SHOW_FAILED, "Ad is null.")
-            Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_FOUND))
+            is HyBidRewardedAd -> {
+                if (fullscreenAd.isReady) {
+                    fullscreenAd.show()
+                    PartnerLogController.log(SHOW_SUCCEEDED)
+                    Result.success(partnerAd)
+                } else {
+                    PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY))
+                }
+            }
+            else -> {
+                PartnerLogController.log(SHOW_FAILED, "Ad is not HyBidInterstitial or HyBidRewarded.")
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_UNSUPPORTED_AD_FORMAT))
+            }
         }
     }
 
     /**
      * Attempt to destroy the current Verve fullscreen ad.
      *
-     * @param partnerAd The [PartnerAd] instance containing the ad to be destroyed.
+     * @param fullscreenAd The fullscreen ad that will be destroyed.
+     * @param partnerAd The [PartnerAd] instance containing the partner ad to report its destroy result.
      *
      * @return Result.success(PartnerAd) if the ad was successfully destroyed, Result.failure(Exception) otherwise.
      */
-    private fun destroyFullscreenAd(partnerAd: PartnerAd): Result<PartnerAd> {
-        return when (partnerAd.request.format) {
-            AdFormat.INTERSTITIAL -> {
-                hyBidInterstitialAdMap.remove(partnerAd.request.identifier)?.let {
-                    it.destroy()
-                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
-                    Result.success(partnerAd)
-                } ?: run {
-                    PartnerLogController.log(INVALIDATE_FAILED, "Ad is null.")
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
-                }
+    private fun destroyFullscreenAd(fullscreenAd: Any?, partnerAd: PartnerAd): Result<PartnerAd> {
+        return when (fullscreenAd) {
+            is HyBidInterstitialAd -> {
+                fullscreenAd.destroy()
+                PartnerLogController.log(INVALIDATE_SUCCEEDED)
+                Result.success(partnerAd)
             }
-            AdFormat.REWARDED -> {
-                hyBidRewardedAdMap.remove(partnerAd.request.identifier)?.let {
-                    it.destroy()
-                    PartnerLogController.log(INVALIDATE_SUCCEEDED)
-                    Result.success(partnerAd)
-                } ?: run {
-                    PartnerLogController.log(INVALIDATE_FAILED, "Ad is null.")
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
-                }
+            is HyBidRewardedAd -> {
+                fullscreenAd.destroy()
+                PartnerLogController.log(INVALIDATE_SUCCEEDED)
+                Result.success(partnerAd)
             }
             else -> {
-                PartnerLogController.log(
-                    INVALIDATE_FAILED,
-                    "Ad is not HyBidInterstitialAd or HyBidRewardedAd."
-                )
+                PartnerLogController.log(INVALIDATE_FAILED, "Ad is not HyBidInterstitialAd or HyBidRewardedAd.")
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
             }
         }
