@@ -20,6 +20,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import net.pubnative.lite.sdk.HyBid
+import net.pubnative.lite.sdk.HyBidError
+import net.pubnative.lite.sdk.HyBidErrorCode
 import net.pubnative.lite.sdk.interstitial.HyBidInterstitialAd
 import net.pubnative.lite.sdk.models.AdSize
 import net.pubnative.lite.sdk.rewarded.HyBidRewardedAd
@@ -36,7 +38,7 @@ class VerveAdapter : PartnerAdapter {
 
     companion object {
         /**
-         * Test mode option that can be set to enabled to test Verve SDK integrations.
+         * Test mode option that can be enabled to test Verve SDK integrations.
          */
         var testModeEnabled = HyBid.isTestMode()
             set(value) {
@@ -186,8 +188,7 @@ class VerveAdapter : PartnerAdapter {
 
         return when (request.format) {
             AdFormat.BANNER -> loadBannerAd(context, request, partnerAdListener)
-            AdFormat.INTERSTITIAL -> loadInterstitialAd(context, request, partnerAdListener)
-            AdFormat.REWARDED -> loadRewardedAd(context, request, partnerAdListener)
+            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> loadFullScreenAd(context, request, partnerAdListener)
             else -> {
                 PartnerLogController.log(LOAD_FAILED)
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT))
@@ -373,13 +374,8 @@ class VerveAdapter : PartnerAdapter {
                             "Throwable error is null."
                         }
                     )
-                    continuation.resume(
-                        Result.failure(
-                            ChartboostMediationAdException(
-                                ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION
-                            )
-                        )
-                    )
+
+                    continuation.resume(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
                 }
 
                 override fun onAdImpression() {
@@ -395,8 +391,7 @@ class VerveAdapter : PartnerAdapter {
 
             if (request.adm.isNullOrEmpty()) {
                 hyBidAdView.load(request.partnerPlacement, hyBidAdViewListener)
-            }
-            else {
+            } else {
                 hyBidAdView.renderCustomMarkup(request.adm, hyBidAdViewListener)
             }
         }
@@ -421,7 +416,7 @@ class VerveAdapter : PartnerAdapter {
     }
 
     /**
-     * Attempt to load a Verve interstitial ad.
+     * Attempt to load a Verve fullscreen ad.
      *
      * @param context The current [Context].
      * @param request The [PartnerAdLoadRequest] instance containing data to load the ad with.
@@ -429,24 +424,42 @@ class VerveAdapter : PartnerAdapter {
      *
      * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
      */
-    private suspend fun loadInterstitialAd(
+    private suspend fun loadFullScreenAd(
         context: Context,
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener
     ): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            HyBidInterstitialAd(
-                context,
-                request.partnerPlacement,
-                buildInterstitialAdListener(request, listener, continuation)
-            ).also {
-                loadIdToHyBidInterstitialAds[request.identifier] = it
-                if (request.adm.isNullOrEmpty()) {
-                    it.load()
+            when(request.format) {
+                AdFormat.INTERSTITIAL -> {
+                    HyBidInterstitialAd(
+                        context,
+                        request.partnerPlacement,
+                        buildInterstitialAdListener(request, listener, continuation)
+                    ).also {
+                        loadIdToHyBidInterstitialAds[request.identifier] = it
+                        if (request.adm.isNullOrEmpty()) {
+                            it.load()
+                        } else {
+                            it.prepareCustomMarkup(request.adm)
+                        }
+                    }
                 }
-                else {
-                    it.prepareCustomMarkup(request.adm)
+                AdFormat.REWARDED -> {
+                    HyBidRewardedAd(
+                        context,
+                        request.partnerPlacement,
+                        buildRewardedAdListener(request, listener, continuation)
+                    ).also {
+                        loadIdToHyBidRewardedAds[request.identifier] = it
+                        if (request.adm.isNullOrEmpty()) {
+                            it.load()
+                        } else {
+                            it.prepareCustomMarkup(request.adm)
+                        }
+                    }
                 }
+                else -> {}
             }
         }
     }
@@ -490,7 +503,7 @@ class VerveAdapter : PartnerAdapter {
 
             loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)
             continuation.resume(
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
+                Result.failure(ChartboostMediationAdException(getChartboostMediationError(error)))
             )
         }
 
@@ -501,44 +514,12 @@ class VerveAdapter : PartnerAdapter {
 
         override fun onInterstitialDismissed() {
             PartnerLogController.log(DID_DISMISS)
-            loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)
             listener.onPartnerAdDismissed(partnerAd, null)
         }
 
         override fun onInterstitialClick() {
             PartnerLogController.log(DID_CLICK)
             listener.onPartnerAdClicked(partnerAd)
-        }
-    }
-
-    /**
-     * Attempt to load a Verve rewarded ad.
-     *
-     * @param context The current [Context].
-     * @param request The [PartnerAdLoadRequest] containing relevant data for the current ad load call.
-     * @param listener A [PartnerAdListener] to notify Chartboost Mediation of ad events.
-     *
-     * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
-     */
-    private suspend fun loadRewardedAd(
-        context: Context,
-        request: PartnerAdLoadRequest,
-        listener: PartnerAdListener
-    ): Result<PartnerAd> {
-        return suspendCancellableCoroutine { continuation ->
-            HyBidRewardedAd(
-                context,
-                request.partnerPlacement,
-                buildRewardedAdListener(request, listener, continuation)
-            ).also {
-                loadIdToHyBidRewardedAds[request.identifier] = it
-                if (request.adm.isNullOrEmpty()) {
-                    it.load()
-                }
-                else {
-                    it.prepareCustomMarkup(request.adm)
-                }
-            }
         }
     }
 
@@ -577,9 +558,7 @@ class VerveAdapter : PartnerAdapter {
                 }
             )
 
-            continuation.resume(
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_EXCEPTION))
-            )
+            continuation.resume(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
         }
 
         override fun onRewardedOpened() {
@@ -589,7 +568,6 @@ class VerveAdapter : PartnerAdapter {
 
         override fun onRewardedClosed() {
             PartnerLogController.log(DID_DISMISS)
-            loadIdToHyBidRewardedAds.remove(partnerAd.request.identifier)
             listener.onPartnerAdDismissed(partnerAd, null)
         }
 
@@ -690,5 +668,45 @@ class VerveAdapter : PartnerAdapter {
             PartnerLogController.log(INVALIDATE_FAILED, "Ad is null.")
             Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
         }
+    }
+
+    /**
+     * Convert a given Verve error into a [ChartboostMediationError].
+     *
+     * @param error The Verve error code to convert.
+     *
+     * @return The corresponding [ChartboostMediationError].
+     */
+    private fun getChartboostMediationError(error: Throwable?) = if (error is HyBidError) {
+        when (error.errorCode) {
+            HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.CM_SHOW_FAILURE_AD_EXPIRED
+            HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.CM_INTERNAL_ERROR
+            HyBidErrorCode.INVALID_AD -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
+            HyBidErrorCode.INVALID_URL -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
+            HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_PARTNER_PLACEMENT
+            HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.CM_LOAD_FAILURE_PARTNER_NOT_INITIALIZED
+            HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.CM_UNKNOWN_ERROR
+            HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT
+
+            HyBidErrorCode.ERROR_RENDERING_BANNER,
+            HyBidErrorCode.ERROR_RENDERING_INTERSTITIAL,
+            HyBidErrorCode.ERROR_RENDERING_REWARDED -> ChartboostMediationError.CM_SHOW_FAILURE_MEDIA_BROKEN
+
+            HyBidErrorCode.VAST_PLAYER_ERROR,
+            HyBidErrorCode.MRAID_PLAYER_ERROR -> ChartboostMediationError.CM_SHOW_FAILURE_VIDEO_PLAYER_ERROR
+
+            HyBidErrorCode.AUCTION_NO_AD,
+            HyBidErrorCode.NO_FILL -> ChartboostMediationError.CM_LOAD_FAILURE_NO_FILL
+
+            HyBidErrorCode.INVALID_ASSET,
+            HyBidErrorCode.INVALID_SIGNAL_DATA,
+            HyBidErrorCode.NULL_AD,
+            HyBidErrorCode.PARSER_ERROR,
+            HyBidErrorCode.SERVER_ERROR_PREFIX -> ChartboostMediationError.CM_PARTNER_ERROR
+
+            else -> ChartboostMediationError.CM_UNKNOWN_ERROR
+        }
+    } else {
+        ChartboostMediationError.CM_UNKNOWN_ERROR
     }
 }
