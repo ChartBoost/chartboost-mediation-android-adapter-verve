@@ -268,7 +268,7 @@ class VerveAdapter : PartnerAdapter {
         gdprConsentStatus: GdprConsentStatus
     ) {
         PartnerLogController.log(
-            when (applies == HyBid.getUserDataManager().gdprApplies()) {
+            when (applies == true && HyBid.getUserDataManager().gdprApplies()) {
                 true -> GDPR_APPLICABLE
                 false -> GDPR_NOT_APPLICABLE
             }
