@@ -22,6 +22,7 @@ import kotlinx.serialization.json.decodeFromJsonElement
 import net.pubnative.lite.sdk.HyBid
 import net.pubnative.lite.sdk.HyBidError
 import net.pubnative.lite.sdk.HyBidErrorCode
+import net.pubnative.lite.sdk.UserDataManager
 import net.pubnative.lite.sdk.interstitial.HyBidInterstitialAd
 import net.pubnative.lite.sdk.models.AdSize
 import net.pubnative.lite.sdk.rewarded.HyBidRewardedAd
@@ -188,7 +189,7 @@ class VerveAdapter : PartnerAdapter {
 
         return when (request.format) {
             AdFormat.BANNER -> loadBannerAd(context, request, partnerAdListener)
-            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> loadFullScreenAd(context, request, partnerAdListener)
+            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> loadFullscreenAd(context, request, partnerAdListener)
             else -> {
                 PartnerLogController.log(LOAD_FAILED)
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT))
@@ -267,10 +268,9 @@ class VerveAdapter : PartnerAdapter {
         gdprConsentStatus: GdprConsentStatus
     ) {
         PartnerLogController.log(
-            when (applies) {
+            when (applies == HyBid.getUserDataManager().gdprApplies()) {
                 true -> GDPR_APPLICABLE
                 false -> GDPR_NOT_APPLICABLE
-                else -> GDPR_UNKNOWN
             }
         )
 
@@ -323,11 +323,11 @@ class VerveAdapter : PartnerAdapter {
      * @param isSubjectToCoppa True if the user is subject to COPPA, false otherwise.
      */
     override fun setUserSubjectToCoppa(context: Context, isSubjectToCoppa: Boolean) {
-        PartnerLogController.log(
-            if (isSubjectToCoppa) COPPA_SUBJECT
-            else COPPA_NOT_SUBJECT
-        )
         if (HyBid.isInitialized()) {
+            PartnerLogController.log(
+                if (isSubjectToCoppa) COPPA_SUBJECT
+                else COPPA_NOT_SUBJECT
+            )
             HyBid.setCoppaEnabled(isSubjectToCoppa)
         } else {
             PartnerLogController.log(CUSTOM, "Cannot set COPPA: The HyBid SDK is not initialized.")
@@ -424,7 +424,7 @@ class VerveAdapter : PartnerAdapter {
      *
      * @return Result.success(PartnerAd) if the ad was successfully loaded, Result.failure(Exception) otherwise.
      */
-    private suspend fun loadFullScreenAd(
+    private suspend fun loadFullscreenAd(
         context: Context,
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener
@@ -677,36 +677,33 @@ class VerveAdapter : PartnerAdapter {
      *
      * @return The corresponding [ChartboostMediationError].
      */
-    private fun getChartboostMediationError(error: Throwable?) = if (error is HyBidError) {
-        when (error.errorCode) {
-            HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.CM_SHOW_FAILURE_AD_EXPIRED
-            HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.CM_INTERNAL_ERROR
-            HyBidErrorCode.INVALID_AD -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
-            HyBidErrorCode.INVALID_URL -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
-            HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_PARTNER_PLACEMENT
-            HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.CM_LOAD_FAILURE_PARTNER_NOT_INITIALIZED
-            HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.CM_UNKNOWN_ERROR
-            HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT
+    private fun getChartboostMediationError(error: Throwable?) = when ((error as? HyBidError)?.errorCode) {
+        HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.CM_SHOW_FAILURE_AD_EXPIRED
+        HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.CM_INTERNAL_ERROR
+        HyBidErrorCode.INVALID_AD -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
+        HyBidErrorCode.INVALID_URL -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
+        HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_PARTNER_PLACEMENT
+        HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.CM_LOAD_FAILURE_PARTNER_NOT_INITIALIZED
+        HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.CM_UNKNOWN_ERROR
+        HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT
 
-            HyBidErrorCode.ERROR_RENDERING_BANNER,
-            HyBidErrorCode.ERROR_RENDERING_INTERSTITIAL,
-            HyBidErrorCode.ERROR_RENDERING_REWARDED -> ChartboostMediationError.CM_SHOW_FAILURE_MEDIA_BROKEN
+        HyBidErrorCode.ERROR_RENDERING_BANNER,
+        HyBidErrorCode.ERROR_RENDERING_INTERSTITIAL,
+        HyBidErrorCode.ERROR_RENDERING_REWARDED -> ChartboostMediationError.CM_SHOW_FAILURE_MEDIA_BROKEN
 
-            HyBidErrorCode.VAST_PLAYER_ERROR,
-            HyBidErrorCode.MRAID_PLAYER_ERROR -> ChartboostMediationError.CM_SHOW_FAILURE_VIDEO_PLAYER_ERROR
+        HyBidErrorCode.VAST_PLAYER_ERROR,
+        HyBidErrorCode.MRAID_PLAYER_ERROR -> ChartboostMediationError.CM_SHOW_FAILURE_VIDEO_PLAYER_ERROR
 
-            HyBidErrorCode.AUCTION_NO_AD,
-            HyBidErrorCode.NO_FILL -> ChartboostMediationError.CM_LOAD_FAILURE_NO_FILL
+        HyBidErrorCode.AUCTION_NO_AD,
+        HyBidErrorCode.NO_FILL -> ChartboostMediationError.CM_LOAD_FAILURE_NO_FILL
 
-            HyBidErrorCode.INVALID_ASSET,
-            HyBidErrorCode.INVALID_SIGNAL_DATA,
-            HyBidErrorCode.NULL_AD,
-            HyBidErrorCode.PARSER_ERROR,
-            HyBidErrorCode.SERVER_ERROR_PREFIX -> ChartboostMediationError.CM_PARTNER_ERROR
+        HyBidErrorCode.INVALID_ASSET,
+        HyBidErrorCode.INVALID_SIGNAL_DATA,
+        HyBidErrorCode.NULL_AD,
+        HyBidErrorCode.PARSER_ERROR,
+        HyBidErrorCode.SERVER_ERROR_PREFIX -> ChartboostMediationError.CM_PARTNER_ERROR
 
-            else -> ChartboostMediationError.CM_UNKNOWN_ERROR
-        }
-    } else {
-        ChartboostMediationError.CM_UNKNOWN_ERROR
+        else -> ChartboostMediationError.CM_UNKNOWN_ERROR
     }
+
 }
