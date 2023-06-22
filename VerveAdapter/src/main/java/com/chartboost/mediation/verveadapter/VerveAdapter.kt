@@ -14,6 +14,7 @@ import com.chartboost.heliumsdk.domain.*
 import com.chartboost.heliumsdk.utils.PartnerLogController
 import com.chartboost.heliumsdk.utils.PartnerLogController.PartnerAdapterEvents.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -367,11 +368,15 @@ class VerveAdapter : PartnerAdapter {
                     request = request
                 )
 
+                fun resumeOnce(result: Result<PartnerAd>) {
+                    if (continuation.context.isActive) {
+                        continuation.resume(result)
+                    }
+                }
+
                 override fun onAdLoaded() {
                     PartnerLogController.log(LOAD_SUCCEEDED)
-                    continuation.resume(
-                        Result.success(partnerAd)
-                    )
+                    resumeOnce(Result.success(partnerAd))
                 }
 
                 override fun onAdLoadFailed(error: Throwable?) {
@@ -384,7 +389,7 @@ class VerveAdapter : PartnerAdapter {
                         }
                     )
 
-                    continuation.resume(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
+                    resumeOnce(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
                 }
 
                 override fun onAdImpression() {
@@ -493,11 +498,15 @@ class VerveAdapter : PartnerAdapter {
             request = request
         )
 
+        fun resumeOnce(result: Result<PartnerAd>) {
+            if (continuation.context.isActive) {
+                continuation.resume(result)
+            }
+        }
+
         override fun onInterstitialLoaded() {
             PartnerLogController.log(LOAD_SUCCEEDED)
-            continuation.resume(
-                Result.success(partnerAd)
-            )
+            resumeOnce(Result.success(partnerAd))
         }
 
         override fun onInterstitialLoadFailed(error: Throwable?) {
@@ -511,9 +520,7 @@ class VerveAdapter : PartnerAdapter {
             )
 
             loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)
-            continuation.resume(
-                Result.failure(ChartboostMediationAdException(getChartboostMediationError(error)))
-            )
+            resumeOnce(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
         }
 
         override fun onInterstitialImpression() {
@@ -552,9 +559,15 @@ class VerveAdapter : PartnerAdapter {
             request = request
         )
 
+        fun resumeOnce(result: Result<PartnerAd>) {
+            if (continuation.context.isActive) {
+                continuation.resume(result)
+            }
+        }
+
         override fun onRewardedLoaded() {
             PartnerLogController.log(LOAD_SUCCEEDED)
-            continuation.resume(Result.success(partnerAd))
+            resumeOnce(Result.success(partnerAd))
         }
 
         override fun onRewardedLoadFailed(error: Throwable?) {
@@ -567,7 +580,7 @@ class VerveAdapter : PartnerAdapter {
                 }
             )
 
-            continuation.resume(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
+            resumeOnce(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
         }
 
         override fun onRewardedOpened() {
