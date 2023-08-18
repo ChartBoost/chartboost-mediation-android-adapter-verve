@@ -73,7 +73,7 @@ dependencies {
     "remoteImplementation"("com.chartboost:chartboost-mediation-sdk:4.0.0")
 
     // Partner SDK
-    implementation("net.pubnative:hybid.sdk:2.17.0")
+    implementation("net.pubnative:hybid.sdk:2.19.0")
 
     // Adapter Dependencies
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.6.4")
