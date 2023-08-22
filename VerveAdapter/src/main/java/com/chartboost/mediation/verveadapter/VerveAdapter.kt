@@ -165,9 +165,9 @@ class VerveAdapter : PartnerAdapter {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
 
         return withContext(Dispatchers.IO) {
-            val token = HyBid.getAppToken() ?: ""
-            PartnerLogController.log(if (token.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
-            mapOf("app_auth_token" to token)
+            val signalData = HyBid.getCustomRequestSignalData("cb") ?: ""
+            PartnerLogController.log(if (signalData.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
+            mapOf("signal_data" to signalData)
         }
     }
 
@@ -406,7 +406,7 @@ class VerveAdapter : PartnerAdapter {
             if (request.adm.isNullOrEmpty()) {
                 hyBidAdView.load(request.partnerPlacement, hyBidAdViewListener)
             } else {
-                hyBidAdView.renderCustomMarkup(request.adm, hyBidAdViewListener)
+                hyBidAdView.renderAd(request.adm, hyBidAdViewListener)
             }
         }
     }
@@ -455,7 +455,7 @@ class VerveAdapter : PartnerAdapter {
                         if (request.adm.isNullOrEmpty()) {
                             it.load()
                         } else {
-                            it.prepareCustomMarkup(request.adm)
+                            it.prepareAd(request.adm)
                         }
                     }
                 }
@@ -469,7 +469,7 @@ class VerveAdapter : PartnerAdapter {
                         if (request.adm.isNullOrEmpty()) {
                             it.load()
                         } else {
-                            it.prepareCustomMarkup(request.adm)
+                            it.prepareAd(request.adm)
                         }
                     }
                 }
