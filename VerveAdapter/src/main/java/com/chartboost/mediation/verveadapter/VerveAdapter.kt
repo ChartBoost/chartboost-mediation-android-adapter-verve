@@ -188,7 +188,7 @@ class VerveAdapter : PartnerAdapter {
         PartnerLogController.log(LOAD_STARTED)
 
         return when (request.format) {
-            AdFormat.BANNER -> loadBannerAd(context, request, partnerAdListener)
+            AdFormat.BANNER, AdFormat.ADAPTIVE_BANNER -> loadBannerAd(context, request, partnerAdListener)
             AdFormat.INTERSTITIAL, AdFormat.REWARDED -> loadFullscreenAd(context, request, partnerAdListener)
             else -> {
                 PartnerLogController.log(LOAD_FAILED)
@@ -218,7 +218,7 @@ class VerveAdapter : PartnerAdapter {
         }
 
         return when (partnerAd.request.format) {
-            AdFormat.BANNER -> {
+            AdFormat.BANNER, AdFormat.ADAPTIVE_BANNER -> {
                 PartnerLogController.log(SHOW_SUCCEEDED)
                 Result.success(partnerAd)
             }
@@ -256,7 +256,7 @@ class VerveAdapter : PartnerAdapter {
         PartnerLogController.log(INVALIDATE_STARTED)
 
         return when (partnerAd.request.format) {
-            AdFormat.BANNER -> destroyBannerAd(partnerAd)
+            AdFormat.BANNER, AdFormat.ADAPTIVE_BANNER -> destroyBannerAd(partnerAd)
             AdFormat.INTERSTITIAL, AdFormat.REWARDED -> destroyFullscreenAd(partnerAd)
             else -> {
                 PartnerLogController.log(INVALIDATE_SUCCEEDED)
