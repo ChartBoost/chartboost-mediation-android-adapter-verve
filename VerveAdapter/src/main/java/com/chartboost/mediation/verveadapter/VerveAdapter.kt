@@ -187,9 +187,9 @@ class VerveAdapter : PartnerAdapter {
     ): Result<PartnerAd> {
         PartnerLogController.log(LOAD_STARTED)
 
-        return when (request.format) {
-            AdFormat.BANNER -> loadBannerAd(context, request, partnerAdListener)
-            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> loadFullscreenAd(context, request, partnerAdListener)
+        return when (request.format.key) {
+            AdFormat.BANNER.key, "adaptive_banner" -> loadBannerAd(context, request, partnerAdListener)
+            AdFormat.INTERSTITIAL.key, AdFormat.REWARDED.key -> loadFullscreenAd(context, request, partnerAdListener)
             else -> {
                 PartnerLogController.log(LOAD_FAILED)
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT))
@@ -217,12 +217,12 @@ class VerveAdapter : PartnerAdapter {
             }
         }
 
-        return when (partnerAd.request.format) {
-            AdFormat.BANNER -> {
+        return when (partnerAd.request.format.key) {
+            AdFormat.BANNER.key, "adaptive_banner" -> {
                 PartnerLogController.log(SHOW_SUCCEEDED)
                 Result.success(partnerAd)
             }
-            AdFormat.INTERSTITIAL -> {
+            AdFormat.INTERSTITIAL.key -> {
                 loadIdToHyBidInterstitialAds[partnerAd.request.identifier]?.let {
                     showAdIfReady(it::isReady, it::show)
                 } ?: run {
@@ -230,7 +230,7 @@ class VerveAdapter : PartnerAdapter {
                     Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
                 }
             }
-            AdFormat.REWARDED -> {
+            AdFormat.REWARDED.key -> {
                 loadIdToHyBidRewardedAds[partnerAd.request.identifier]?.let {
                     showAdIfReady(it::isReady, it::show)
                 } ?: run {
@@ -255,9 +255,9 @@ class VerveAdapter : PartnerAdapter {
     override suspend fun invalidate(partnerAd: PartnerAd): Result<PartnerAd> {
         PartnerLogController.log(INVALIDATE_STARTED)
 
-        return when (partnerAd.request.format) {
-            AdFormat.BANNER -> destroyBannerAd(partnerAd)
-            AdFormat.INTERSTITIAL, AdFormat.REWARDED -> destroyFullscreenAd(partnerAd)
+        return when (partnerAd.request.format.key) {
+            AdFormat.BANNER.key, "adaptive_banner" -> destroyBannerAd(partnerAd)
+            AdFormat.INTERSTITIAL.key, AdFormat.REWARDED.key -> destroyFullscreenAd(partnerAd)
             else -> {
                 PartnerLogController.log(INVALIDATE_SUCCEEDED)
                 Result.success(partnerAd)
@@ -444,8 +444,8 @@ class VerveAdapter : PartnerAdapter {
         listener: PartnerAdListener
     ): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            when(request.format) {
-                AdFormat.INTERSTITIAL -> {
+            when(request.format.key) {
+                AdFormat.INTERSTITIAL.key -> {
                     HyBidInterstitialAd(
                         context,
                         request.partnerPlacement,
@@ -459,7 +459,7 @@ class VerveAdapter : PartnerAdapter {
                         }
                     }
                 }
-                AdFormat.REWARDED -> {
+                AdFormat.REWARDED.key -> {
                     HyBidRewardedAd(
                         context,
                         request.partnerPlacement,
@@ -618,8 +618,8 @@ class VerveAdapter : PartnerAdapter {
             return Result.success(partnerAd)
         }
 
-        return when (partnerAd.request.format) {
-            AdFormat.INTERSTITIAL -> {
+        return when (partnerAd.request.format.key) {
+            AdFormat.INTERSTITIAL.key -> {
                 loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)?.let {
                     destroyAd(it::destroy)
                 } ?: run {
@@ -627,7 +627,7 @@ class VerveAdapter : PartnerAdapter {
                     Result.success(partnerAd)
                 }
             }
-            AdFormat.REWARDED-> {
+            AdFormat.REWARDED.key-> {
                 loadIdToHyBidRewardedAds.remove(partnerAd.request.identifier)?.let {
                     destroyAd(it::destroy)
                 } ?: run {
