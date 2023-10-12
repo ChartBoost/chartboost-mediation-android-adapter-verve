@@ -4,7 +4,7 @@ Note the first digit of every adapter version corresponds to the major version o
 Adapters are compatible with any Chartboost Mediation SDK version within that major version.
 
 ### 4.2.17.0.2
-- Applied AD_VIEWABLE as the impression tracking method for HyBidAdView banners.
+- Banner impressions are now tracked on ad show using the AD_VIEWABLE method.
 
 ### 4.2.17.0.1
 - Updated to handle recent AdFormat changes.
