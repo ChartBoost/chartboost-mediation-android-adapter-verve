@@ -25,6 +25,7 @@ import net.pubnative.lite.sdk.HyBidError
 import net.pubnative.lite.sdk.HyBidErrorCode
 import net.pubnative.lite.sdk.interstitial.HyBidInterstitialAd
 import net.pubnative.lite.sdk.models.AdSize
+import net.pubnative.lite.sdk.models.ImpressionTrackingMethod
 import net.pubnative.lite.sdk.rewarded.HyBidRewardedAd
 import net.pubnative.lite.sdk.utils.Logger
 import net.pubnative.lite.sdk.views.HyBidAdView
@@ -359,8 +360,10 @@ class VerveAdapter : PartnerAdapter {
         listener: PartnerAdListener
     ): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            val hyBidAdView = HyBidAdView(context)
-            hyBidAdView.setAdSize(getHyBidAdSize(request.size))
+            val hyBidAdView = HyBidAdView(context).apply {
+                setAdSize(getHyBidAdSize(request.size))
+                setTrackingMethod(ImpressionTrackingMethod.AD_VIEWABLE)
+            }
             val hyBidAdViewListener = object : HyBidAdView.Listener {
                 val partnerAd = PartnerAd(
                     ad = hyBidAdView,
