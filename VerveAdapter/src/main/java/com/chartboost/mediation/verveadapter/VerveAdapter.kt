@@ -37,7 +37,6 @@ import kotlin.coroutines.suspendCoroutine
  * The Chartboost Mediation Verve Adapter.
  */
 class VerveAdapter : PartnerAdapter {
-
     companion object {
         /**
          * Test mode option that can be enabled to test Verve SDK integrations.
@@ -48,7 +47,7 @@ class VerveAdapter : PartnerAdapter {
                 field = value
                 PartnerLogController.log(
                     CUSTOM,
-                    "Verve SDK test mode is ${if (value) "enabled" else "disabled"}."
+                    "Verve SDK test mode is ${if (value) "enabled" else "disabled"}.",
                 )
             }
 
@@ -121,7 +120,7 @@ class VerveAdapter : PartnerAdapter {
      */
     override suspend fun setUp(
         context: Context,
-        partnerConfiguration: PartnerConfiguration
+        partnerConfiguration: PartnerConfiguration,
     ): Result<Unit> {
         PartnerLogController.log(SETUP_STARTED)
         loadIdToHyBidInterstitialAds.clear()
@@ -134,19 +133,25 @@ class VerveAdapter : PartnerAdapter {
                 ?.let { appToken ->
                     HyBid.initialize(
                         appToken,
-                        context.applicationContext as Application
+                        context.applicationContext as Application,
                     ) { success ->
                         when (success) {
                             true -> continuation.resume(Result.success(PartnerLogController.log(SETUP_SUCCEEDED)))
                             false -> {
                                 PartnerLogController.log(SETUP_FAILED)
-                                continuation.resume(Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN)))
+                                continuation.resume(
+                                    Result.failure(
+                                        ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN),
+                                    ),
+                                )
                             }
                         }
                     }
                 } ?: run {
                 PartnerLogController.log(SETUP_FAILED, "Missing app token.")
-                continuation.resumeWith(Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_INVALID_CREDENTIALS)))
+                continuation.resumeWith(
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_INVALID_CREDENTIALS)),
+                )
             }
         }
     }
@@ -161,7 +166,7 @@ class VerveAdapter : PartnerAdapter {
      */
     override suspend fun fetchBidderInformation(
         context: Context,
-        request: PreBidRequest
+        request: PreBidRequest,
     ): Map<String, String> {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
 
@@ -184,7 +189,7 @@ class VerveAdapter : PartnerAdapter {
     override suspend fun load(
         context: Context,
         request: PartnerAdLoadRequest,
-        partnerAdListener: PartnerAdListener
+        partnerAdListener: PartnerAdListener,
     ): Result<PartnerAd> {
         PartnerLogController.log(LOAD_STARTED)
 
@@ -206,8 +211,14 @@ class VerveAdapter : PartnerAdapter {
      *
      * @return Result.success(PartnerAd) if the ad was successfully shown, Result.failure(Exception) otherwise.
      */
-    override suspend fun show(context: Context, partnerAd: PartnerAd): Result<PartnerAd> {
-        fun showAdIfReady(isReady: () -> Boolean, showAd: () -> Unit): Result<PartnerAd> {
+    override suspend fun show(
+        context: Context,
+        partnerAd: PartnerAd,
+    ): Result<PartnerAd> {
+        fun showAdIfReady(
+            isReady: () -> Boolean,
+            showAd: () -> Unit,
+        ): Result<PartnerAd> {
             return if (isReady()) {
                 showAd()
                 PartnerLogController.log(SHOW_SUCCEEDED)
@@ -276,13 +287,13 @@ class VerveAdapter : PartnerAdapter {
     override fun setGdpr(
         context: Context,
         applies: Boolean?,
-        gdprConsentStatus: GdprConsentStatus
+        gdprConsentStatus: GdprConsentStatus,
     ) {
         PartnerLogController.log(
             when (applies == true && HyBid.getUserDataManager().gdprApplies()) {
                 true -> GDPR_APPLICABLE
                 false -> GDPR_NOT_APPLICABLE
-            }
+            },
         )
 
         PartnerLogController.log(
@@ -290,7 +301,7 @@ class VerveAdapter : PartnerAdapter {
                 GdprConsentStatus.GDPR_CONSENT_UNKNOWN -> GDPR_CONSENT_UNKNOWN
                 GdprConsentStatus.GDPR_CONSENT_GRANTED -> GDPR_CONSENT_GRANTED
                 GdprConsentStatus.GDPR_CONSENT_DENIED -> GDPR_CONSENT_DENIED
-            }
+            },
         )
 
         if (HyBid.isInitialized() && applies == HyBid.getUserDataManager().gdprApplies()) {
@@ -314,11 +325,14 @@ class VerveAdapter : PartnerAdapter {
     override fun setCcpaConsent(
         context: Context,
         hasGrantedCcpaConsent: Boolean,
-        privacyString: String
+        privacyString: String,
     ) {
         PartnerLogController.log(
-            if (hasGrantedCcpaConsent) CCPA_CONSENT_GRANTED
-            else CCPA_CONSENT_DENIED
+            if (hasGrantedCcpaConsent) {
+                CCPA_CONSENT_GRANTED
+            } else {
+                CCPA_CONSENT_DENIED
+            },
         )
         if (HyBid.isInitialized()) {
             HyBid.getUserDataManager().iabusPrivacyString = privacyString
@@ -333,11 +347,17 @@ class VerveAdapter : PartnerAdapter {
      * @param context The current [Context].
      * @param isSubjectToCoppa True if the user is subject to COPPA, false otherwise.
      */
-    override fun setUserSubjectToCoppa(context: Context, isSubjectToCoppa: Boolean) {
+    override fun setUserSubjectToCoppa(
+        context: Context,
+        isSubjectToCoppa: Boolean,
+    ) {
         if (HyBid.isInitialized()) {
             PartnerLogController.log(
-                if (isSubjectToCoppa) COPPA_SUBJECT
-                else COPPA_NOT_SUBJECT
+                if (isSubjectToCoppa) {
+                    COPPA_SUBJECT
+                } else {
+                    COPPA_NOT_SUBJECT
+                },
             )
             HyBid.setCoppaEnabled(isSubjectToCoppa)
         } else {
@@ -357,54 +377,57 @@ class VerveAdapter : PartnerAdapter {
     private suspend fun loadBannerAd(
         context: Context,
         request: PartnerAdLoadRequest,
-        listener: PartnerAdListener
+        listener: PartnerAdListener,
     ): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            val hyBidAdView = HyBidAdView(context).apply {
-                setAdSize(getHyBidAdSize(request.size))
-                setTrackingMethod(ImpressionTrackingMethod.AD_VIEWABLE)
-            }
-            val hyBidAdViewListener = object : HyBidAdView.Listener {
-                val partnerAd = PartnerAd(
-                    ad = hyBidAdView,
-                    details = emptyMap(),
-                    request = request
-                )
+            val hyBidAdView =
+                HyBidAdView(context).apply {
+                    setAdSize(getHyBidAdSize(request.size))
+                    setTrackingMethod(ImpressionTrackingMethod.AD_VIEWABLE)
+                }
+            val hyBidAdViewListener =
+                object : HyBidAdView.Listener {
+                    val partnerAd =
+                        PartnerAd(
+                            ad = hyBidAdView,
+                            details = emptyMap(),
+                            request = request,
+                        )
 
-                fun resumeOnce(result: Result<PartnerAd>) {
-                    if (continuation.context.isActive) {
-                        continuation.resume(result)
+                    fun resumeOnce(result: Result<PartnerAd>) {
+                        if (continuation.context.isActive) {
+                            continuation.resume(result)
+                        }
+                    }
+
+                    override fun onAdLoaded() {
+                        PartnerLogController.log(LOAD_SUCCEEDED)
+                        resumeOnce(Result.success(partnerAd))
+                    }
+
+                    override fun onAdLoadFailed(error: Throwable?) {
+                        PartnerLogController.log(
+                            LOAD_FAILED,
+                            if (error != null) {
+                                "Message: ${error.message}\nCause:${error.cause}"
+                            } else {
+                                "Throwable error is null."
+                            },
+                        )
+
+                        resumeOnce(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
+                    }
+
+                    override fun onAdImpression() {
+                        PartnerLogController.log(DID_TRACK_IMPRESSION)
+                        listener.onPartnerAdImpression(partnerAd)
+                    }
+
+                    override fun onAdClick() {
+                        PartnerLogController.log(DID_CLICK)
+                        listener.onPartnerAdClicked(partnerAd)
                     }
                 }
-
-                override fun onAdLoaded() {
-                    PartnerLogController.log(LOAD_SUCCEEDED)
-                    resumeOnce(Result.success(partnerAd))
-                }
-
-                override fun onAdLoadFailed(error: Throwable?) {
-                    PartnerLogController.log(
-                        LOAD_FAILED,
-                        if (error != null) {
-                            "Message: ${error.message}\nCause:${error.cause}"
-                        } else {
-                            "Throwable error is null."
-                        }
-                    )
-
-                    resumeOnce(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
-                }
-
-                override fun onAdImpression() {
-                    PartnerLogController.log(DID_TRACK_IMPRESSION)
-                    listener.onPartnerAdImpression(partnerAd)
-                }
-
-                override fun onAdClick() {
-                    PartnerLogController.log(DID_CLICK)
-                    listener.onPartnerAdClicked(partnerAd)
-                }
-            }
 
             if (request.adm.isNullOrEmpty()) {
                 hyBidAdView.load(request.partnerPlacement, hyBidAdViewListener)
@@ -444,15 +467,15 @@ class VerveAdapter : PartnerAdapter {
     private suspend fun loadFullscreenAd(
         context: Context,
         request: PartnerAdLoadRequest,
-        listener: PartnerAdListener
+        listener: PartnerAdListener,
     ): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            when(request.format.key) {
+            when (request.format.key) {
                 AdFormat.INTERSTITIAL.key -> {
                     HyBidInterstitialAd(
                         context,
                         request.partnerPlacement,
-                        buildInterstitialAdListener(request, listener, continuation)
+                        buildInterstitialAdListener(request, listener, continuation),
                     ).also {
                         loadIdToHyBidInterstitialAds[request.identifier] = it
                         if (request.adm.isNullOrEmpty()) {
@@ -466,7 +489,7 @@ class VerveAdapter : PartnerAdapter {
                     HyBidRewardedAd(
                         context,
                         request.partnerPlacement,
-                        buildRewardedAdListener(request, listener, continuation)
+                        buildRewardedAdListener(request, listener, continuation),
                     ).also {
                         loadIdToHyBidRewardedAds[request.identifier] = it
                         if (request.adm.isNullOrEmpty()) {
@@ -493,13 +516,14 @@ class VerveAdapter : PartnerAdapter {
     private fun buildInterstitialAdListener(
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener,
-        continuation: Continuation<Result<PartnerAd>>
+        continuation: Continuation<Result<PartnerAd>>,
     ) = object : HyBidInterstitialAd.Listener {
-        val partnerAd = PartnerAd(
-            ad = request.identifier,
-            details = emptyMap(),
-            request = request
-        )
+        val partnerAd =
+            PartnerAd(
+                ad = request.identifier,
+                details = emptyMap(),
+                request = request,
+            )
 
         fun resumeOnce(result: Result<PartnerAd>) {
             if (continuation.context.isActive) {
@@ -519,7 +543,7 @@ class VerveAdapter : PartnerAdapter {
                     "Message: ${error.message}\nCause:${error.cause}"
                 } else {
                     "Throwable error is null."
-                }
+                },
             )
 
             loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)
@@ -554,13 +578,14 @@ class VerveAdapter : PartnerAdapter {
     private fun buildRewardedAdListener(
         request: PartnerAdLoadRequest,
         listener: PartnerAdListener,
-        continuation: Continuation<Result<PartnerAd>>
+        continuation: Continuation<Result<PartnerAd>>,
     ) = object : HyBidRewardedAd.Listener {
-        val partnerAd = PartnerAd(
-            ad = request.identifier,
-            details = emptyMap(),
-            request = request
-        )
+        val partnerAd =
+            PartnerAd(
+                ad = request.identifier,
+                details = emptyMap(),
+                request = request,
+            )
 
         fun resumeOnce(result: Result<PartnerAd>) {
             if (continuation.context.isActive) {
@@ -580,7 +605,7 @@ class VerveAdapter : PartnerAdapter {
                     "Message: ${error.message}\nCause:${error.cause}"
                 } else {
                     "Throwable error is null."
-                }
+                },
             )
 
             resumeOnce(Result.failure(ChartboostMediationAdException(getChartboostMediationError(error))))
@@ -630,7 +655,7 @@ class VerveAdapter : PartnerAdapter {
                     Result.success(partnerAd)
                 }
             }
-            AdFormat.REWARDED.key-> {
+            AdFormat.REWARDED.key -> {
                 loadIdToHyBidRewardedAds.remove(partnerAd.request.identifier)?.let {
                     destroyAd(it::destroy)
                 } ?: run {
@@ -676,26 +701,29 @@ class VerveAdapter : PartnerAdapter {
      *
      * @return The corresponding [ChartboostMediationError].
      */
-    private fun getChartboostMediationError(error: Throwable?) = when ((error as? HyBidError)?.errorCode) {
-        HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.CM_SHOW_FAILURE_AD_EXPIRED
-        HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.CM_INTERNAL_ERROR
-        HyBidErrorCode.INVALID_AD -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
-        HyBidErrorCode.INVALID_URL -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
-        HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_PARTNER_PLACEMENT
-        HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.CM_LOAD_FAILURE_PARTNER_NOT_INITIALIZED
-        HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.CM_UNKNOWN_ERROR
-        HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT
+    private fun getChartboostMediationError(error: Throwable?) =
+        when ((error as? HyBidError)?.errorCode) {
+            HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.CM_SHOW_FAILURE_AD_EXPIRED
+            HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.CM_INTERNAL_ERROR
+            HyBidErrorCode.INVALID_AD -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
+            HyBidErrorCode.INVALID_URL -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
+            HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_PARTNER_PLACEMENT
+            HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.CM_LOAD_FAILURE_PARTNER_NOT_INITIALIZED
+            HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.CM_UNKNOWN_ERROR
+            HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT
 
-        HyBidErrorCode.ERROR_RENDERING_BANNER,
-        HyBidErrorCode.ERROR_RENDERING_INTERSTITIAL,
-        HyBidErrorCode.ERROR_RENDERING_REWARDED -> ChartboostMediationError.CM_SHOW_FAILURE_MEDIA_BROKEN
+            HyBidErrorCode.ERROR_RENDERING_BANNER,
+            HyBidErrorCode.ERROR_RENDERING_INTERSTITIAL,
+            HyBidErrorCode.ERROR_RENDERING_REWARDED,
+            -> ChartboostMediationError.CM_SHOW_FAILURE_MEDIA_BROKEN
 
-        HyBidErrorCode.VAST_PLAYER_ERROR,
-        HyBidErrorCode.MRAID_PLAYER_ERROR -> ChartboostMediationError.CM_SHOW_FAILURE_VIDEO_PLAYER_ERROR
+            HyBidErrorCode.VAST_PLAYER_ERROR,
+            HyBidErrorCode.MRAID_PLAYER_ERROR,
+            -> ChartboostMediationError.CM_SHOW_FAILURE_VIDEO_PLAYER_ERROR
 
-        HyBidErrorCode.AUCTION_NO_AD,
-        HyBidErrorCode.NO_FILL -> ChartboostMediationError.CM_LOAD_FAILURE_NO_FILL
-        else -> ChartboostMediationError.CM_PARTNER_ERROR
-    }
-
+            HyBidErrorCode.AUCTION_NO_AD,
+            HyBidErrorCode.NO_FILL,
+            -> ChartboostMediationError.CM_LOAD_FAILURE_NO_FILL
+            else -> ChartboostMediationError.CM_PARTNER_ERROR
+        }
 }
