@@ -7,6 +7,7 @@
 
 package com.chartboost.mediation.verveadapter
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.util.Size
@@ -206,13 +207,13 @@ class VerveAdapter : PartnerAdapter {
     /**
      * Attempt to show the currently loaded Verve ad.
      *
-     * @param context The current [Context]
+     * @param activity The current [Activity]
      * @param partnerAd The [PartnerAd] object containing the ad to be shown.
      *
      * @return Result.success(PartnerAd) if the ad was successfully shown, Result.failure(Exception) otherwise.
      */
     override suspend fun show(
-        context: Context,
+        activity: Activity,
         partnerAd: PartnerAd,
     ): Result<PartnerAd> {
         fun showAdIfReady(
