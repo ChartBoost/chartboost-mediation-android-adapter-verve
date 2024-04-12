@@ -13,7 +13,7 @@ The Chartboost Mediation Verve adapter mediates HyBid via the Chartboost Mediati
 
 In your `build.gradle`, add the following entry:
 ```
-    implementation "com.chartboost:chartboost-mediation-adapter-verve:4.2.17.0.2"
+    implementation "com.chartboost:chartboost-mediation-adapter-verve:4.3.0.0.0"
 ```
 
 ## Contributions
