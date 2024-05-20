@@ -90,7 +90,7 @@ class VerveAdapter : PartnerAdapter {
                                 PartnerLogController.log(SETUP_FAILED)
                                 continuation.resume(
                                     Result.failure(
-                                        ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_UNKNOWN),
+                                        ChartboostMediationAdException(ChartboostMediationError.InitializationError.Unknown),
                                     ),
                                 )
                             }
@@ -99,7 +99,7 @@ class VerveAdapter : PartnerAdapter {
                 } ?: run {
                 PartnerLogController.log(SETUP_FAILED, "Missing app token.")
                 continuation.resumeWith(
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INITIALIZATION_FAILURE_INVALID_CREDENTIALS)),
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.InitializationError.InvalidCredentials)),
                 )
             }
         }
@@ -147,7 +147,7 @@ class VerveAdapter : PartnerAdapter {
             AdFormat.INTERSTITIAL.key, AdFormat.REWARDED.key -> loadFullscreenAd(context, request, partnerAdListener)
             else -> {
                 PartnerLogController.log(LOAD_FAILED)
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT))
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.LoadError.UnsupportedAdFormat))
             }
         }
     }
@@ -174,7 +174,7 @@ class VerveAdapter : PartnerAdapter {
                 Result.success(partnerAd)
             } else {
                 PartnerLogController.log(SHOW_FAILED, "Ad is not ready.")
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_AD_NOT_READY))
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.ShowError.AdNotReady))
             }
         }
 
@@ -188,7 +188,7 @@ class VerveAdapter : PartnerAdapter {
                     showAdIfReady(it::isReady, it::show)
                 } ?: run {
                     PartnerLogController.log(SHOW_FAILED, "Ad is null.")
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.InvalidateError.AdNotFound))
                 }
             }
             AdFormat.REWARDED.key -> {
@@ -196,12 +196,12 @@ class VerveAdapter : PartnerAdapter {
                     showAdIfReady(it::isReady, it::show)
                 } ?: run {
                     PartnerLogController.log(SHOW_FAILED, "Ad is null.")
-                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
+                    Result.failure(ChartboostMediationAdException(ChartboostMediationError.InvalidateError.AdNotFound))
                 }
             }
             else -> {
                 PartnerLogController.log(SHOW_FAILED)
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_SHOW_FAILURE_UNSUPPORTED_AD_FORMAT))
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.ShowError.UnsupportedAdFormat))
             }
         }
     }
@@ -614,7 +614,7 @@ class VerveAdapter : PartnerAdapter {
             }
             else -> {
                 PartnerLogController.log(INVALIDATE_FAILED, "Ad is not HyBidInterstitialAd or HyBidRewardedAd.")
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.InvalidateError.AdNotFound))
             }
         }
     }
@@ -635,11 +635,11 @@ class VerveAdapter : PartnerAdapter {
                 Result.success(partnerAd)
             } ?: run {
                 PartnerLogController.log(INVALIDATE_FAILED, "Ad is not a HyBidAdView.")
-                Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_WRONG_RESOURCE_TYPE))
+                Result.failure(ChartboostMediationAdException(ChartboostMediationError.InvalidateError.WrongResourceType))
             }
         } ?: run {
             PartnerLogController.log(INVALIDATE_FAILED, "Ad is null.")
-            Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_INVALIDATE_FAILURE_AD_NOT_FOUND))
+            Result.failure(ChartboostMediationAdException(ChartboostMediationError.InvalidateError.AdNotFound))
         }
     }
 
@@ -652,27 +652,26 @@ class VerveAdapter : PartnerAdapter {
      */
     private fun getChartboostMediationError(error: Throwable?) =
         when ((error as? HyBidError)?.errorCode) {
-            HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.CM_SHOW_FAILURE_AD_EXPIRED
-            HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.CM_INTERNAL_ERROR
-            HyBidErrorCode.INVALID_AD -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
-            HyBidErrorCode.INVALID_URL -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_AD_REQUEST
-            HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.CM_LOAD_FAILURE_INVALID_PARTNER_PLACEMENT
-            HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.CM_LOAD_FAILURE_PARTNER_NOT_INITIALIZED
-            HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.CM_UNKNOWN_ERROR
-            HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT
+            HyBidErrorCode.EXPIRED_AD -> ChartboostMediationError.ShowError.AdExpired
+            HyBidErrorCode.INTERNAL_ERROR -> ChartboostMediationError.OtherError.InternalError
+            HyBidErrorCode.INVALID_AD, HyBidErrorCode.INVALID_URL -> ChartboostMediationError.LoadError.InvalidAdRequest
+            HyBidErrorCode.INVALID_ZONE_ID -> ChartboostMediationError.LoadError.InvalidPartnerPlacement
+            HyBidErrorCode.NOT_INITIALISED -> ChartboostMediationError.LoadError.PartnerNotInitialized
+            HyBidErrorCode.UNKNOWN_ERROR -> ChartboostMediationError.OtherError.Unknown
+            HyBidErrorCode.UNSUPPORTED_ASSET -> ChartboostMediationError.LoadError.UnsupportedAdFormat
 
             HyBidErrorCode.ERROR_RENDERING_BANNER,
             HyBidErrorCode.ERROR_RENDERING_INTERSTITIAL,
             HyBidErrorCode.ERROR_RENDERING_REWARDED,
-            -> ChartboostMediationError.CM_SHOW_FAILURE_MEDIA_BROKEN
+            -> ChartboostMediationError.ShowError.MediaBroken
 
             HyBidErrorCode.VAST_PLAYER_ERROR,
             HyBidErrorCode.MRAID_PLAYER_ERROR,
-            -> ChartboostMediationError.CM_SHOW_FAILURE_VIDEO_PLAYER_ERROR
+            -> ChartboostMediationError.ShowError.VideoPlayerError
 
             HyBidErrorCode.AUCTION_NO_AD,
             HyBidErrorCode.NO_FILL,
-            -> ChartboostMediationError.CM_LOAD_FAILURE_NO_FILL
-            else -> ChartboostMediationError.CM_PARTNER_ERROR
+            -> ChartboostMediationError.LoadError.NoFill
+            else -> ChartboostMediationError.OtherError.PartnerError
         }
 }

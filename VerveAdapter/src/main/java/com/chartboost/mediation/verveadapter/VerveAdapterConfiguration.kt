@@ -43,8 +43,8 @@ object VerveAdapterConfiguration : PartnerAdapterConfiguration {
             HyBid.setTestMode(value)
             field = value
             PartnerLogController.log(
-                    PartnerLogController.PartnerAdapterEvents.CUSTOM,
-                    "Verve SDK test mode is ${if (value) "enabled" else "disabled"}.",
+                PartnerLogController.PartnerAdapterEvents.CUSTOM,
+                "Verve SDK test mode is ${if (value) "enabled" else "disabled"}.",
             )
         }
 
