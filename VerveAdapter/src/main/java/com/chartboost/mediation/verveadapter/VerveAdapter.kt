@@ -419,7 +419,7 @@ class VerveAdapter : PartnerAdapter {
                     }
                 }
                 else -> {
-                    continuation.resume(Result.failure(ChartboostMediationAdException(ChartboostMediationError.CM_LOAD_FAILURE_UNSUPPORTED_AD_FORMAT)))
+                    continuation.resume(Result.failure(ChartboostMediationAdException(ChartboostMediationError.LoadError.UnsupportedAdFormat)))
                 }
             }
         }
