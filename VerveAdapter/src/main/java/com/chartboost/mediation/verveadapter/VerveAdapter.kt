@@ -13,7 +13,29 @@ import android.content.Context
 import android.util.Size
 import com.chartboost.chartboostmediationsdk.domain.*
 import com.chartboost.chartboostmediationsdk.utils.PartnerLogController
-import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.*
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.BIDDER_INFO_FETCH_FAILED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.BIDDER_INFO_FETCH_STARTED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.BIDDER_INFO_FETCH_SUCCEEDED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.CUSTOM
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.DID_CLICK
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.DID_DISMISS
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.DID_REWARD
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.DID_TRACK_IMPRESSION
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.INVALIDATE_FAILED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.INVALIDATE_STARTED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.INVALIDATE_SUCCEEDED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.LOAD_FAILED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.LOAD_STARTED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.LOAD_SUCCEEDED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.SETUP_FAILED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.SETUP_STARTED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.SETUP_SUCCEEDED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.SHOW_FAILED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.SHOW_SUCCEEDED
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.USER_IS_NOT_UNDERAGE
+import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.USER_IS_UNDERAGE
+import com.chartboost.core.consent.ConsentKey
+import com.chartboost.core.consent.ConsentValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -70,7 +92,7 @@ class VerveAdapter : PartnerAdapter {
     override suspend fun setUp(
         context: Context,
         partnerConfiguration: PartnerConfiguration,
-    ): Result<Unit> {
+    ): Result<Map<String, Any>> {
         PartnerLogController.log(SETUP_STARTED)
         loadIdToHyBidInterstitialAds.clear()
         loadIdToHyBidRewardedAds.clear()
@@ -85,7 +107,11 @@ class VerveAdapter : PartnerAdapter {
                         context.applicationContext as Application,
                     ) { success ->
                         when (success) {
-                            true -> continuation.resume(Result.success(PartnerLogController.log(SETUP_SUCCEEDED)))
+                            true -> {
+                                setConsents(context, partnerConfiguration.consents, partnerConfiguration.consents.keys)
+                                PartnerLogController.log(SETUP_SUCCEEDED)
+                                continuation.resume(Result.success(emptyMap()))
+                            }
                             false -> {
                                 PartnerLogController.log(SETUP_FAILED)
                                 continuation.resume(
@@ -109,20 +135,20 @@ class VerveAdapter : PartnerAdapter {
      * Get a bid token if network bidding is supported.
      *
      * @param context The current [Context].
-     * @param request The [PreBidRequest] instance containing relevant data for the current bid request.
+     * @param request The [PartnerAdPreBidRequest] instance containing relevant data for the current bid request.
      *
      * @return A Map of biddable token Strings.
      */
     override suspend fun fetchBidderInformation(
         context: Context,
-        request: PreBidRequest,
-    ): Map<String, String> {
+        request: PartnerAdPreBidRequest,
+    ): Result<Map<String, String>> {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
 
         return withContext(Dispatchers.IO) {
             val token = HyBid.getAppToken() ?: ""
             PartnerLogController.log(if (token.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
-            mapOf("app_auth_token" to token)
+            Result.success(mapOf("app_auth_token" to token))
         }
     }
 
@@ -142,9 +168,9 @@ class VerveAdapter : PartnerAdapter {
     ): Result<PartnerAd> {
         PartnerLogController.log(LOAD_STARTED)
 
-        return when (request.format.key) {
-            AdFormat.BANNER.key, "adaptive_banner" -> loadBannerAd(context, request, partnerAdListener)
-            AdFormat.INTERSTITIAL.key, AdFormat.REWARDED.key -> loadFullscreenAd(context, request, partnerAdListener)
+        return when (request.format) {
+            PartnerAdFormats.BANNER -> loadBannerAd(context, request, partnerAdListener)
+            PartnerAdFormats.INTERSTITIAL, PartnerAdFormats.REWARDED -> loadFullscreenAd(context, request, partnerAdListener)
             else -> {
                 PartnerLogController.log(LOAD_FAILED)
                 Result.failure(ChartboostMediationAdException(ChartboostMediationError.LoadError.UnsupportedAdFormat))
@@ -178,12 +204,12 @@ class VerveAdapter : PartnerAdapter {
             }
         }
 
-        return when (partnerAd.request.format.key) {
-            AdFormat.BANNER.key, "adaptive_banner" -> {
+        return when (partnerAd.request.format) {
+            PartnerAdFormats.BANNER -> {
                 PartnerLogController.log(SHOW_SUCCEEDED)
                 Result.success(partnerAd)
             }
-            AdFormat.INTERSTITIAL.key -> {
+            PartnerAdFormats.INTERSTITIAL -> {
                 loadIdToHyBidInterstitialAds[partnerAd.request.identifier]?.let {
                     showAdIfReady(it::isReady, it::show)
                 } ?: run {
@@ -191,7 +217,7 @@ class VerveAdapter : PartnerAdapter {
                     Result.failure(ChartboostMediationAdException(ChartboostMediationError.InvalidateError.AdNotFound))
                 }
             }
-            AdFormat.REWARDED.key -> {
+            PartnerAdFormats.REWARDED -> {
                 loadIdToHyBidRewardedAds[partnerAd.request.identifier]?.let {
                     showAdIfReady(it::isReady, it::show)
                 } ?: run {
@@ -216,9 +242,9 @@ class VerveAdapter : PartnerAdapter {
     override suspend fun invalidate(partnerAd: PartnerAd): Result<PartnerAd> {
         PartnerLogController.log(INVALIDATE_STARTED)
 
-        return when (partnerAd.request.format.key) {
-            AdFormat.BANNER.key, "adaptive_banner" -> destroyBannerAd(partnerAd)
-            AdFormat.INTERSTITIAL.key, AdFormat.REWARDED.key -> destroyFullscreenAd(partnerAd)
+        return when (partnerAd.request.format) {
+            PartnerAdFormats.BANNER -> destroyBannerAd(partnerAd)
+            PartnerAdFormats.INTERSTITIAL, PartnerAdFormats.REWARDED -> destroyFullscreenAd(partnerAd)
             else -> {
                 PartnerLogController.log(INVALIDATE_SUCCEEDED)
                 Result.success(partnerAd)
@@ -226,91 +252,35 @@ class VerveAdapter : PartnerAdapter {
         }
     }
 
-    /**
-     * Notify the Verve SDK of the GDPR applicability and consent status.
-     *
-     * @param context The current [Context].
-     * @param applies True if GDPR applies, false otherwise.
-     * @param gdprConsentStatus The user's GDPR consent status.
-     */
-    override fun setGdpr(
+    override fun setConsents(
         context: Context,
-        applies: Boolean?,
-        gdprConsentStatus: GdprConsentStatus,
+        consents: Map<ConsentKey, ConsentValue>,
+        modifiedKeys: Set<ConsentKey>
     ) {
-        PartnerLogController.log(
-            when (applies == true && HyBid.getUserDataManager().gdprApplies()) {
-                true -> GDPR_APPLICABLE
-                false -> GDPR_NOT_APPLICABLE
-            },
-        )
-
-        PartnerLogController.log(
-            when (gdprConsentStatus) {
-                GdprConsentStatus.GDPR_CONSENT_UNKNOWN -> GDPR_CONSENT_UNKNOWN
-                GdprConsentStatus.GDPR_CONSENT_GRANTED -> GDPR_CONSENT_GRANTED
-                GdprConsentStatus.GDPR_CONSENT_DENIED -> GDPR_CONSENT_DENIED
-            },
-        )
-
-        if (HyBid.isInitialized() && applies == HyBid.getUserDataManager().gdprApplies()) {
-            when (gdprConsentStatus) {
-                GdprConsentStatus.GDPR_CONSENT_GRANTED -> HyBid.getUserDataManager().grantConsent()
-                GdprConsentStatus.GDPR_CONSENT_DENIED -> HyBid.getUserDataManager().denyConsent()
-                else -> {}
-            }
-        } else {
-            PartnerLogController.log(CUSTOM, "Cannot set GDPR: The HyBid SDK is not initialized.")
-        }
+        // Hybid automatically pulls consents directly from Shared Preferences
     }
 
     /**
-     * Notify Verve of the user's CCPA consent status, if applicable.
+     * Notify Verve if the user is underage.
      *
      * @param context The current [Context].
-     * @param hasGrantedCcpaConsent True if the user has granted CCPA consent, false otherwise.
-     * @param privacyString The CCPA privacy string.
+     * @param isUserUnderage True if the user is underage, false otherwise.
      */
-    override fun setCcpaConsent(
+    override fun setIsUserUnderage(
         context: Context,
-        hasGrantedCcpaConsent: Boolean,
-        privacyString: String,
-    ) {
-        PartnerLogController.log(
-            if (hasGrantedCcpaConsent) {
-                CCPA_CONSENT_GRANTED
-            } else {
-                CCPA_CONSENT_DENIED
-            },
-        )
-        if (HyBid.isInitialized()) {
-            HyBid.getUserDataManager().iabusPrivacyString = privacyString
-        } else {
-            PartnerLogController.log(CUSTOM, "Cannot set CCPA: The HyBid SDK is not initialized.")
-        }
-    }
-
-    /**
-     * Notify Verve of the COPPA subjectivity.
-     *
-     * @param context The current [Context].
-     * @param isSubjectToCoppa True if the user is subject to COPPA, false otherwise.
-     */
-    override fun setUserSubjectToCoppa(
-        context: Context,
-        isSubjectToCoppa: Boolean,
+        isUserUnderage: Boolean,
     ) {
         if (HyBid.isInitialized()) {
             PartnerLogController.log(
-                if (isSubjectToCoppa) {
-                    COPPA_SUBJECT
+                if (isUserUnderage) {
+                    USER_IS_UNDERAGE
                 } else {
-                    COPPA_NOT_SUBJECT
+                    USER_IS_NOT_UNDERAGE
                 },
             )
-            HyBid.setCoppaEnabled(isSubjectToCoppa)
+            HyBid.setCoppaEnabled(isUserUnderage)
         } else {
-            PartnerLogController.log(CUSTOM, "Cannot set COPPA: The HyBid SDK is not initialized.")
+            PartnerLogController.log(CUSTOM, "Cannot set isUserUnderage: The HyBid SDK is not initialized.")
         }
     }
 
@@ -331,7 +301,7 @@ class VerveAdapter : PartnerAdapter {
         return suspendCancellableCoroutine { continuation ->
             val hyBidAdView =
                 HyBidAdView(context).apply {
-                    setAdSize(getHyBidAdSize(request.size))
+                    setAdSize(getHyBidAdSize(request.bannerSize?.size))
                     setTrackingMethod(ImpressionTrackingMethod.AD_VIEWABLE)
                 }
             val hyBidAdViewListener =
@@ -419,8 +389,8 @@ class VerveAdapter : PartnerAdapter {
         listener: PartnerAdListener,
     ): Result<PartnerAd> {
         return suspendCancellableCoroutine { continuation ->
-            when (request.format.key) {
-                AdFormat.INTERSTITIAL.key -> {
+            when (request.format) {
+                PartnerAdFormats.INTERSTITIAL -> {
                     HyBidInterstitialAd(
                         context,
                         request.partnerPlacement,
@@ -434,7 +404,7 @@ class VerveAdapter : PartnerAdapter {
                         }
                     }
                 }
-                AdFormat.REWARDED.key -> {
+                PartnerAdFormats.REWARDED -> {
                     HyBidRewardedAd(
                         context,
                         request.partnerPlacement,
@@ -448,7 +418,9 @@ class VerveAdapter : PartnerAdapter {
                         }
                     }
                 }
-                else -> {}
+                else -> {
+                    continuation.resume(Result.failure(ChartboostMediationAdException(ChartboostMediationError.LoadError.UnsupportedAdFormat)))
+                }
             }
         }
     }
@@ -595,8 +567,8 @@ class VerveAdapter : PartnerAdapter {
             return Result.success(partnerAd)
         }
 
-        return when (partnerAd.request.format.key) {
-            AdFormat.INTERSTITIAL.key -> {
+        return when (partnerAd.request.format) {
+            PartnerAdFormats.INTERSTITIAL -> {
                 loadIdToHyBidInterstitialAds.remove(partnerAd.request.identifier)?.let {
                     destroyAd(it::destroy)
                 } ?: run {
@@ -604,7 +576,7 @@ class VerveAdapter : PartnerAdapter {
                     Result.success(partnerAd)
                 }
             }
-            AdFormat.REWARDED.key -> {
+            PartnerAdFormats.REWARDED -> {
                 loadIdToHyBidRewardedAds.remove(partnerAd.request.identifier)?.let {
                     destroyAd(it::destroy)
                 } ?: run {
