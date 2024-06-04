@@ -255,7 +255,7 @@ class VerveAdapter : PartnerAdapter {
     override fun setConsents(
         context: Context,
         consents: Map<ConsentKey, ConsentValue>,
-        modifiedKeys: Set<ConsentKey>
+        modifiedKeys: Set<ConsentKey>,
     ) {
         // Hybid automatically pulls consents directly from Shared Preferences
     }
@@ -419,7 +419,9 @@ class VerveAdapter : PartnerAdapter {
                     }
                 }
                 else -> {
-                    continuation.resume(Result.failure(ChartboostMediationAdException(ChartboostMediationError.LoadError.UnsupportedAdFormat)))
+                    continuation.resume(
+                        Result.failure(ChartboostMediationAdException(ChartboostMediationError.LoadError.UnsupportedAdFormat)),
+                    )
                 }
             }
         }
