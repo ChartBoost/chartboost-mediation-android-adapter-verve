@@ -39,6 +39,7 @@ object VerveAdapterConfiguration : PartnerAdapterConfiguration {
      * Test mode option that can be enabled to test Verve SDK integrations.
      */
     var testModeEnabled = HyBid.isTestMode()
+        get() = HyBid.isTestMode()
         set(value) {
             HyBid.setTestMode(value)
             field = value
