@@ -172,7 +172,7 @@ class VerveAdapter : PartnerAdapter {
 
         return withContext(Dispatchers.IO) {
             val signalData = HyBid.getCustomRequestSignalData(context, "cb") ?: ""
-            PartnerLogController.log(if (token.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
+            PartnerLogController.log(if (signalData.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
             mapOf("signal_data" to signalData)
         }
     }
