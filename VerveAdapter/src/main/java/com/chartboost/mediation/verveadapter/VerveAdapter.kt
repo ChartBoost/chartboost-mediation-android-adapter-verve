@@ -146,9 +146,9 @@ class VerveAdapter : PartnerAdapter {
         PartnerLogController.log(BIDDER_INFO_FETCH_STARTED)
 
         return withContext(Dispatchers.IO) {
-            val token = HyBid.getAppToken() ?: ""
-            PartnerLogController.log(if (token.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
-            Result.success(mapOf("app_auth_token" to token))
+            val signalData = HyBid.getCustomRequestSignalData(context, "cb") ?: ""
+            PartnerLogController.log(if (signalData.isEmpty()) BIDDER_INFO_FETCH_FAILED else BIDDER_INFO_FETCH_SUCCEEDED)
+            Result.success(mapOf("signal_data" to signalData))
         }
     }
 
@@ -348,10 +348,11 @@ class VerveAdapter : PartnerAdapter {
                     }
                 }
 
-            if (request.adm.isNullOrEmpty()) {
+            val signalData = request.partnerSettings["signal"] as? String ?: ""
+            if (signalData.isEmpty()) {
                 hyBidAdView.load(request.partnerPlacement, hyBidAdViewListener)
             } else {
-                hyBidAdView.renderCustomMarkup(request.adm, hyBidAdViewListener)
+                hyBidAdView.renderAd(signalData, hyBidAdViewListener)
             }
         }
     }
@@ -397,10 +398,11 @@ class VerveAdapter : PartnerAdapter {
                         buildInterstitialAdListener(request, listener, continuation),
                     ).also {
                         loadIdToHyBidInterstitialAds[request.identifier] = it
-                        if (request.adm.isNullOrEmpty()) {
+                        val signalData = request.partnerSettings["signal"] as? String ?: ""
+                        if (signalData.isEmpty()) {
                             it.load()
                         } else {
-                            it.prepareCustomMarkup(request.adm)
+                            it.prepareAd(signalData)
                         }
                     }
                 }
@@ -410,11 +412,12 @@ class VerveAdapter : PartnerAdapter {
                         request.partnerPlacement,
                         buildRewardedAdListener(request, listener, continuation),
                     ).also {
+                        val signalData = request.partnerSettings["signal"] as? String ?: ""
                         loadIdToHyBidRewardedAds[request.identifier] = it
-                        if (request.adm.isNullOrEmpty()) {
+                        if (signalData.isEmpty()) {
                             it.load()
                         } else {
-                            it.prepareCustomMarkup(request.adm)
+                            it.prepareAd(signalData)
                         }
                     }
                 }
