@@ -6,6 +6,9 @@ Adapters are compatible with any Chartboost Mediation SDK version within that ma
 ### 5.3.0.2.0
 - This version of the adapter supports Chartboost Mediation SDK version 5.+.
 
+### 4.3.0.2.1
+- Updated to pass "signal" instead of "adm".
+
 ### 4.3.0.2.0
 - This version of the adapter has been certified with HyBid SDK 3.0.2.
 
