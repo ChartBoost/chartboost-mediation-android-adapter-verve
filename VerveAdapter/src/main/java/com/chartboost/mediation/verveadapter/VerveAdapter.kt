@@ -35,7 +35,9 @@ import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerA
 import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.USER_IS_NOT_UNDERAGE
 import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.USER_IS_UNDERAGE
 import com.chartboost.core.consent.ConsentKey
+import com.chartboost.core.consent.ConsentKeys
 import com.chartboost.core.consent.ConsentValue
+import com.chartboost.core.consent.ConsentValues
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -257,7 +259,38 @@ class VerveAdapter : PartnerAdapter {
         consents: Map<ConsentKey, ConsentValue>,
         modifiedKeys: Set<ConsentKey>
     ) {
-        // Hybid automatically pulls consents directly from Shared Preferences
+        val consent = consents[configuration.partnerId]?.takeIf { it.isNotBlank() }
+            ?: consents[ConsentKeys.GDPR_CONSENT_GIVEN]?.takeIf { it.isNotBlank() }
+        consent?.let {
+            if (it == ConsentValues.DOES_NOT_APPLY) {
+                PartnerLogController.log(PartnerLogController.PartnerAdapterEvents.GDPR_NOT_APPLICABLE)
+                return@let
+            }
+
+            when(it) {
+                ConsentValues.GRANTED -> {
+                    PartnerLogController.log(PartnerLogController.PartnerAdapterEvents.GDPR_CONSENT_GRANTED)
+                    HyBid.getUserDataManager().grantConsent()
+                }
+                ConsentValues.DENIED -> {
+                    PartnerLogController.log(PartnerLogController.PartnerAdapterEvents.GDPR_CONSENT_DENIED)
+                    HyBid.getUserDataManager().denyConsent()
+                }
+                else -> PartnerLogController.PartnerAdapterEvents.GDPR_CONSENT_UNKNOWN
+            }
+        }
+
+        consents[ConsentKeys.TCF]?.let {
+            HyBid.getUserDataManager().iabgdprConsentString = it
+        }
+
+        consents[ConsentKeys.GPP]?.let {
+            HyBid.getUserDataManager().gppString = it
+        }
+
+        consents[ConsentKeys.USP]?.let {
+            HyBid.getUserDataManager().iabusPrivacyString = it
+        }
     }
 
     /**
