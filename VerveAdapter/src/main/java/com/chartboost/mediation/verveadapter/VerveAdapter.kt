@@ -11,6 +11,7 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.util.Size
+import com.chartboost.chartboostmediationsdk.ad.ChartboostMediationBannerAdView.ChartboostMediationBannerSize.Companion.asSize
 import com.chartboost.chartboostmediationsdk.domain.*
 import com.chartboost.chartboostmediationsdk.utils.PartnerLogController
 import com.chartboost.chartboostmediationsdk.utils.PartnerLogController.PartnerAdapterEvents.BIDDER_INFO_FETCH_FAILED
@@ -334,7 +335,7 @@ class VerveAdapter : PartnerAdapter {
         return suspendCancellableCoroutine { continuation ->
             val hyBidAdView =
                 HyBidAdView(context).apply {
-                    setAdSize(getHyBidAdSize(request.bannerSize?.size))
+                    setAdSize(getHyBidAdSize(request.bannerSize?.asSize()))
                     setTrackingMethod(ImpressionTrackingMethod.AD_VIEWABLE)
                 }
             val hyBidAdViewListener =
