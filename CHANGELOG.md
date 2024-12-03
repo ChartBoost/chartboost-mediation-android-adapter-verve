@@ -14,6 +14,9 @@ All official releases can be found on this repository's [releases page](https://
 ### 5.3.2.1.0
 - This version of the adapter has been certified with HyBid SDK 3.2.1.
 
+### 5.3.2.0.0
+- This version of the adapter has been certified with HyBid SDK 3.2.0.
+
 ### 5.3.1.0.0
 - This version of the adapter has been certified with HyBid SDK 3.1.0.
 
@@ -24,6 +27,9 @@ All official releases can be found on this repository's [releases page](https://
 - This version of the adapter supports Chartboost Mediation SDK version 5.+.
 
 ## Mediation 4
+
+### 4.3.2.0.0
+- This version of the adapter has been certified with HyBid SDK 3.2.0.
 
 ### 4.3.1.0.0
 - This version of the adapter has been certified with HyBid SDK 3.1.0.
